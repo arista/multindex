@@ -115,9 +115,6 @@ UniqueMapIndex<I, K> extends MapIndex<I, I, K>
 
 ManyMapIndex<I, V, K> extends MapIndex<I, V, K>
 
-SortedIndex<I, V, K> extends IndexBase<I> {
-}
-
 UniqueSortedIndex<I, K> extends SortedIndex<I, I, K>
 
 ManySortedIndex<I, V, K> extends SortedIndex<I, V, K>
