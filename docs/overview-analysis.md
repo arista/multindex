@@ -26,6 +26,9 @@ The API shows `SortedIndex` defined twice (lines 98-104 and 118-119). The second
 
 Removed the second SortedIndex - yes, that was an oversight
 
+#### Follow-up:
+
+Good, that clears it up.
 
 ### 2. Iteration vs Values
 
@@ -36,6 +39,10 @@ The interfaces extend `Iterable<I>` and have an `items` property returning `Iter
 #### Author's Response:
 
 I think iterating over any index should return its items.  I think this is implied by the IndexBase inheritance, no?
+
+#### Follow-up:
+
+Yes, `IndexBase<I>` extending `Iterable<I>` does imply iteration yields items. My concern was more about whether `ManyMapIndex` should *also* provide access to its subindexes (the `V` values). Consider: if you have invoices grouped by customer, you might want to iterate all invoices (items), but you might also want to iterate the customer groups (subindexes). Currently `keys` gives you customer IDs, and `get(customerId)` gives you one subindex, but there's no `values` iterator. Probably fine to defer this - users can do `for (const key of index.keys) { const subindex = index.get(key); ... }`.
 
 ### 3. Deletion Semantics
 
@@ -48,6 +55,10 @@ These could be useful convenience methods, even if they ultimately delegate to t
 #### Author's Response:
 
 Those two suggestions are actually quite interesting!  Would those make more sense as a "clear()" method on any index or Multindex?  Oh nvm, I see you suggest that later.
+
+#### Follow-up:
+
+Yes, `clear()` on any index/subindex makes sense. The semantics would be: remove all items contained in this index from the parent Multindex. For a subindex in a ManyMapIndex, that means removing all items with that particular key. For a query result from a SortedIndex, that means removing all items in the range. Clean and intuitive.
 
 ### 4. Key Specification - The Hybrid Approach
 
@@ -86,6 +97,27 @@ Ok, your suggestion sounds good.  My only question would be setters, if the appl
 
 uniqueMap(key(i=>i.name, (i,v)=>{i.name = v}))
 
+#### Follow-up:
+
+Yes, that pattern would work. For compound keys with setters:
+
+```typescript
+manySorted(compoundKey(
+  asc(i => i.date, (i, v) => { i.date = v }),
+  desc(i => i.priority, (i, v) => { i.priority = v })
+))
+```
+
+The type signature for the helper would be something like:
+```typescript
+function asc<I, K>(
+  getter: (item: I) => K,
+  setter?: (item: I, value: K) => void
+): SortSpec<I, K>
+```
+
+If setter is provided, it unlocks `subindex.add(item)` functionality. If not, that method could either be unavailable (via conditional types) or throw at runtime. I'd lean toward the latter for simplicity - the conditional types approach gets complex.
+
 ### 5. Partial Key Types for Compound Keys
 
 The `PK` (partial key) concept is mentioned but not fully specified. For a compound key `[K1, K2, K3]`, the partial key type should be:
@@ -98,6 +130,22 @@ This can be expressed in TypeScript using recursive conditional types, but it's 
 #### Author's Response:
 
 I think the ability to specify bounds with partial keys is valuable, and difficult to do without built-in functionality.  I'm counting on TypeScript (well, you being able to write TypesScript) being able to specify this, and to do it with minimal impact on the user through some powerful inference magic.
+
+#### Follow-up:
+
+Agreed, and yes this is achievable. Here's a sketch of the type-level machinery:
+
+```typescript
+// Generate prefix types from a tuple
+type Prefixes<T extends any[]> = T extends [infer First, ...infer Rest]
+  ? [] | [First, ...Prefixes<Rest>]
+  : [];
+
+// Example: Prefixes<[Date, string, number]> =
+//   [] | [Date] | [Date, string] | [Date, string, number]
+```
+
+The user never sees this - they just write `index.query({ ge: [someDate] })` and TypeScript validates that `[Date]` is a valid prefix of `[Date, string, number]`. If they try `{ ge: [someString] }` they get a type error. The inference magic comes from the `compoundKey()` helper inferring the full key tuple type, then the index type computing the prefix type automatically.
 
 ### 6. Error Handling
 
@@ -115,6 +163,18 @@ I'm not sure there are going to be a whole lot of errors involved in the library
 
 So I guess that's two errors, which I guess means it makes sense for there to be a MultindexError hierarchy
 
+#### Follow-up:
+
+Makes sense. A simple hierarchy would be:
+
+```typescript
+class MultindexError extends Error {}
+class KeyNotFoundError extends MultindexError { key: unknown }
+class DuplicateKeyError extends MultindexError { key: unknown; existingItem: unknown }
+```
+
+The `DuplicateKeyError` including the existing item is useful for debugging ("you tried to add invoice 123 but invoice 123 already exists"). Keep it minimal - we can add more error types later if needed.
+
 ### 7. Reactivity Integration
 
 The dependency on chchchchanges is mentioned but details are sparse. Questions:
@@ -130,6 +190,23 @@ Yes, this is a ittle vague right now.   My guess is that each Multindex is creat
 For the notification mechanism, can it just be whatever chchchchanges offers?
 
 Regarding batch updates, see #8 below
+
+#### Follow-up:
+
+Using whatever chchchchanges offers makes sense - keeps the libraries cleanly separated. For ergonomics, a pattern I've seen work well:
+
+```typescript
+// Option 1: Explicit context
+const ctx = new MultindexContext(changeDomain)
+const invoices = new InvoiceIndex(ctx)
+
+// Option 2: Global default with override
+MultindexContext.setDefault(changeDomain)
+const invoices = new InvoiceIndex() // uses default
+const special = new InvoiceIndex({ changeDomain: otherDomain }) // override
+```
+
+Option 2 is more ergonomic for apps that use a single ChangeDomain everywhere (probably common), while still allowing flexibility. I'd suggest starting with Option 1 (explicit) and adding the global default later if it becomes painful.
 
 ### 8. Memory and Performance Considerations
 
@@ -153,6 +230,22 @@ You also brought up the issue of lazy or eager indexes.  I think that matters mo
 
 Regarding lazy regeneration - this is a good question.  The system is meant to work with chchchchanges, and possibly even with [brint](../../brint/README.md).  There is already a notion of signaling changes to values that downstream items can use to invalidate cached values and regenerate when they need to.  We should think how to hook into those systems more deeply, but perhaps start with just a "dumb" approach.
 
+#### Follow-up:
+
+Agreed on starting "dumb" (eager reindexing on every change). The transaction concept is the right abstraction for bulk operations. Sketch:
+
+```typescript
+multindex.transaction(() => {
+  for (const invoice of invoices) {
+    multindex.add(invoice)
+  }
+}) // indexes updated once here
+```
+
+For the sorted array heuristic: if > 10-20% of items need reindexing within a transaction, do a full sort instead of N individual reindex operations. This threshold can be tuned later based on benchmarks.
+
+The lazy/eager question can probably be deferred. Start eager, and if profiling shows it's a bottleneck, add a lazy mode where indexes mark themselves dirty and rebuild on first access after a transaction.
+
 ### 9. Subindex Configuration
 
 For Many indexes, the overview says:
@@ -171,6 +264,24 @@ Yes, subindexes can be many indexes - deep nesting is perfectly allowed
 
 The syntax is still TBD, it's likely a required parameter to a many index - a function that takes a key from the parent and returns a subindex
 
+#### Follow-up:
+
+For the factory syntax, something like:
+
+```typescript
+manyMap(
+  i => i.customerId,
+  (key) => uniqueSortedArray(i => i.date) // subindex factory
+)
+```
+
+The factory receives the key so it *could* use it for configuration, but typically won't. The return type of the factory determines the `V` type parameter. TypeScript should infer all of this:
+
+```typescript
+// Inferred type:
+// ManyMapIndex<Invoice, UniqueSortedIndex<Invoice, Date>, string>
+```
+
 ### 10. Missing Functionality
 
 Consider adding:
@@ -182,6 +293,14 @@ Consider adding:
 #### Author's Response:
 
 clear and addAll are good.  I suppose find is good... although, is there a general set of functions available to anything that's Iterable?  Or maybe a widespread library of such?
+
+#### Follow-up:
+
+For iterable utilities, there's [iterare](https://www.npmjs.com/package/iterare) and similar libraries, but nothing in the standard library beyond `Array.from()`. Since indexes already extend `Iterable<I>`, users can do `Array.from(index).find(...)` or use a library.
+
+That said, `find()` on an index could be smarter than the generic version - it could stop early and avoid materializing an array. Probably not worth adding initially, but keep it in mind.
+
+The more valuable addition might be `first()` and `last()` for SortedIndex - getting the min/max item without iteration. These are O(1) for most sorted data structures.
 
 ## Opinion on Key Design Discussions
 
@@ -230,6 +349,10 @@ This avoids the complexity of setter specifications and keeps data mutation expl
 
 Regarding removing setters - hm.  I'll have to think about this.  I know in ORM's it's fairly useful (at least in ActiveRecord, but I know other ORM's don't offer this).  You might be right that it's not worth it.
 
+#### Follow-up:
+
+Fair point about ORMs. If we do support setters, I'd make them fully optional - a convenience for those who want it, but not required. The key design (with optional setter parameter) I proposed earlier would support this naturally. We can defer the decision and add setter support later without breaking changes.
+
 ## Implementation Suggestions
 
 ### Index Creation API
@@ -271,6 +394,34 @@ class InvoiceItems extends Multindex<Invoice> {
 
 That's a shame about "this" not being available.  I do want this to be typesafe, so you can just do invoiceItems.byId..., but also ergonomic - ideally declaring the property, configuring the index, and having the type be inferred.  Can any of the above do that?
 
+#### Follow-up:
+
+**Option A (Builder)** can achieve all three goals:
+
+```typescript
+const InvoiceItems = Multindex.create<Invoice>(b => ({
+  byId: b.uniqueMap(i => i.id),
+  byDate: b.manySorted(asc(i => i.date))
+}))
+
+// TypeScript infers:
+// {
+//   byId: UniqueMapIndex<Invoice, string>,
+//   byDate: ManySortedIndex<Invoice, ..., Date>
+// } & MultindexBase<Invoice>
+
+const items = new InvoiceItems()
+items.byId.get("123") // fully typed
+```
+
+The builder function's return type is inferred from the object literal, and `Multindex.create` returns a class that has those properties typed correctly. This requires some type-level gymnastics but is definitely achievable.
+
+**Option B (Decorators)** requires explicit type annotations (the `!:` syntax), so it fails the "type be inferred" requirement.
+
+**Option C (Static)** could work with some cleverness, but feels less natural.
+
+I'd recommend Option A. Want me to prototype the types for `Multindex.create`?
+
 ### Reactivity Strategy
 
 Given the dependency on chchchchanges, I'd suggest:
@@ -282,6 +433,18 @@ Given the dependency on chchchchanges, I'd suggest:
 #### Author's Response
 
 This looks good.  I think another question is downstream changes - can reactive functions be built on the indexes themselves.  Would this mean giving them first-class support in chchchchanges?  Or maybe defining an extension mechanism for chchchchanges?
+
+#### Follow-up:
+
+Good question. For downstream reactivity (e.g., a computed value that depends on `index.count`), there are a few approaches:
+
+1. **Index properties as signals**: `index.count` could itself be a reactive signal that updates when items are added/removed. This would require chchchchanges integration.
+
+2. **Change events**: Indexes emit events (`itemAdded`, `itemRemoved`, `reindexed`) that downstream code can subscribe to. More traditional but less elegant with signals.
+
+3. **Extension mechanism**: Multindex provides hooks that chchchchanges can use to wrap index properties as signals. This keeps the libraries decoupled.
+
+I'd lean toward option 3 - define a clear interface (like `IndexObserver`) that chchchchanges can implement. This way multindex doesn't depend on chchchchanges internals, just on an abstract observer interface. The chchchchanges integration would be a separate adapter.
 
 ## Questions for the Author
 
@@ -298,6 +461,16 @@ This looks good.  I think another question is downstream changes - can reactive 
 3. no I don't think so, at least not now.  That can probably be done at the application level if needed
 4. not sure about that for now.  It's an interesting question - sort of a "database dump"
 5. no - this is meant more for interaction with things like chchchchanges or brint, less with things like purely functional React.
+
+#### Follow-up:
+
+These answers help scope the initial implementation. A few notes:
+
+- **Thousands of items**: This means we don't need to worry about memory-mapped structures or streaming. Simple in-memory data structures (arrays, Maps, Sets) will work fine. BTree might still be useful for sorted indexes with frequent insertions, but a sorted array with binary search is a reasonable starting point.
+
+- **Serialization**: Could be as simple as `JSON.stringify(Array.from(multindex))` for the items, then rebuilding indexes on load. The indexes themselves don't need to be serialized since they're derived from the items. Something to design later but not blocking.
+
+- **No immutable variants**: Makes sense given the reactive focus. Mutability is the point.
 
 ## Conclusion
 
