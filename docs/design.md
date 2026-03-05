@@ -11,7 +11,6 @@ Technical design for Multindex
 Multindex<I> {
   static create<I>(f: IndexBuilderFn, config?: MultindexConfig): MIXS
   
-  // FIXME
   add(item: I): I
   remove(item: I)
 }
@@ -22,32 +21,28 @@ where IXS is a mapping from name to index type, and MIXS is a Multindex that imp
 
 
 MultindexConfig {
-  // FIXME
   domain?: ChangeDomain // From chchchchanges
+  // FIXME - other config?
 }
 
 IndexBuilder<I> {
+  // Allow app to choose different index characteristics and, in some cases, actual implementations (e.g., set vs. arraySet, sorted vs. BTree)
+
   set(spec?: SetSpec<I>) => SetIndex
   arraySet(spec?: ArraySetSpec<I>) => SetIndex
 
-  uniqueMap<K>(keySpec: MapKeySpec<I, K>) =>  UniqueMapIndex<I, K>
-    OR uniqueMap<K>(spec: UniqueMapSpec<I, K>) =>  UniqueMapIndex<I, K>
-  uniqueSorted<K>(keySpec: SortedKeySpec<I, K>) =>  UniqueSortedIndex<I, K>
-    OR uniqueSorted<K>(spec: UniqueSortedSpec<I, K>) =>  UniqueSortedIndex<I, K>
-  uniqueBTree<K>(keySpec: SortedKeySpec<I, K>) =>  UniqueBTreeIndex<I, K>
-    OR uniqueBTree<K>(spec: UniqueBTreeSpec<I, K>) =>  UniqueBTreeIndex<I, K>
+  uniqueMap<K>(spec: UniqueMapSpec<I, K>) =>  UniqueMapIndex<I, K>
+  uniqueSorted<K>(spec: UniqueSortedSpec<I, K>) =>  UniqueSortedIndex<I, K>
+  uniqueBTree<K>(spec: UniqueBTreeSpec<I, K>) =>  UniqueBTreeIndex<I, K>
 
-  manyMap<K>(keySpec: MapKeySpec<I, K>, subindexSpec: SubindexSpec<I>) => ManyMapIndex
-    OR manyMap<K>(spec: ManyMapSpec<I, K>) =>  ManyMapIndex<I, K>
-  manySorted<K>(keySpec: SortedKeySpec<I, K>, subindexSpec: SubindexSpec<I>) => ManySortedIndex
-    OR manySorted<K>(spec: ManySortedSpec<I, K>) =>  ManySortedIndex<I, K>
-  manyBTree<K>(keySpec: BTreeKeySpec<I, K>, subindexSpec: SubindexSpec<I>) => ManyBTreeIndex
-    OR manyBTree<K>(spec: ManyBTreeSpec<I, K>) =>  ManyBTreeIndex<I, K>
+  manyMap<K>(spec: ManyMapSpec<I, K>) =>  ManyMapIndex<I, K>
+  manySorted<K>(spec: ManySortedSpec<I, K>) =>  ManySortedIndex<I, K>
+  manyBTree<K>(spec: ManyBTreeSpec<I, K>) =>  ManyBTreeIndex<I, K>
   
   // helper functions
   key<K>(get: (item: I) => K, set?: (item: I, value: K) => void) => MapKeySpec<I, K>
-  asc<K extends SingleSortKey>(get: (item: I) => K, set?: (item: I, value: K) => void) => SortedKeySpec<I, K>
-  desc<K extends SingleSortKey>(get: (item: I) => K, set?: (item: I, value: K) => void) => SortedKeySpec<I, K>
+  asc<K extends SingleSortKey>(get: (item: I) => K, set?: (item: I, value: K) => void) => SingleSortKeySpec<I, K>
+  desc<K extends SingleSortKey>(get: (item: I) => K, set?: (item: I, value: K) => void) => SingleSortKeySpec<I, K>
   filter: (get: (item: I) => boolean, set?: (item: I, shouldInclude: boolean) => void)
 }
 
@@ -95,8 +90,10 @@ UniqueBTreeSpec<I, K> = {
   filter?: FilterSpec<I>
 }
 
+SortKeySpec = SingleSortKeySpec | CompoundSortKeySpec
+
 SingleSortKeySpec<I, K extends SingleSortKey> =
-  GetterSingleSortKeySpec<I, K>
+  GetterSingleSortKeySpec<I, K> // Defaults to "asc" direction
   | FullSingleSortKeySpec<I, K>
   
 GetterSingleSortKeySpec<I, K extends SingleSortKey> = (item: I) => K
@@ -109,7 +106,7 @@ FullSingleSortKeySpec<I, K extends SingleSortKey> = {
 
 SortKey = SingleSortKey | CompoundSortKey
 
-SingleSortKey = null | undefined | boolean | string | number
+SingleSortKey = null | undefined | boolean | string | number | Date
 
 // Does it make sense to explicitly list out tuple types of up to N elements?  Or is there a TS way to express tuple types such that partial key types (below) can be derived from them?
 CompoundSortKeySpec = tuple of SingleSortKeySpec
