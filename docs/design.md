@@ -43,7 +43,7 @@ IndexBuilder<I> {
   key<K>(get: (item: I) => K, set?: (item: I, value: K) => void) => MapKeySpec<I, K>
   asc<K extends SingleSortKey>(get: (item: I) => K, set?: (item: I, value: K) => void) => SingleSortKeySpec<I, K>
   desc<K extends SingleSortKey>(get: (item: I) => K, set?: (item: I, value: K) => void) => SingleSortKeySpec<I, K>
-  filter: (get: (item: I) => boolean, set?: (item: I, shouldInclude: boolean) => void)
+  filter: (get: (item: I) => boolean) => FilterSpec
 }
 
 FilterSpec<I> = GetterFilterSpec<I> | FullFilterSpec<I>
@@ -52,7 +52,6 @@ GetterFilterSpec<I> = (item: I) => boolean
 
 FullFilterSpec<I> = {
   get: (item: I) => boolean
-  set?: (item: I, shouldInclude: boolean) => void
 }
 
 
@@ -184,4 +183,158 @@ ManyMapIndex<I, V, K> extends MapIndex<I, V, K>
 UniqueSortedIndex<I, K> extends SortedIndex<I, I, K>
 
 ManySortedIndex<I, V, K> extends SortedIndex<I, V, K>
+```
+
+## Index Implementations
+
+These are the index implementations currently offered:
+
+* SetIndexImpl - SetIndex backed by a JS Set
+* ArraySetIndexImpl - SetIndex backed by an Array, maintains items in the order they were added
+* UniqueMapIndexImpl - MapIndex backed by a JS Map
+* ManyMapIndexImpl - MapIndex backed by a JS Map, with subindex values
+* UniqueSortedIndexImpl - SortedIndex backed by a JS Array
+* ManySortedIndexImpl - SortedIndex backed by a JS Array, with subindex values
+* UniqueBTreeArrayIndexImpl - SortedIndex backed by a BTree (implementation TBD)
+* ManyBTreeArrayIndexImpl - SortedIndex backed by a BTree (implementation TBD), with subindex values
+
+Each of the implementations must implement these internal operations:
+
+```
+IndexImpl<I> {
+  // Adds the item to the internal structure, if not already there.  Updates the count appropriately.  If this is a keyed index, then the key is computed using a function wrapped for reactivity.  The callback function for the reactivity calls onChange.  If a filter is configured for the index, then the filter function is called, again with the same reactivity rules, and the item is only added if the result is true.  However, even if a filter does not add the item, the item still needs to be tracked in case its filter result changes, or if the item is removed.  Assumes that item is already change-enabled.  Returns the amount that the index's count changes.
+  internalAdd(item: I): number
+  
+  // Removes an item from the internal structure, if it's there.  Updates the count appropriately.  Returns the amount that the index's count changed
+  internalRemove(item: I): number
+  
+  // Set as the callback for changes detected when computing an item's key and filter value
+  onChange(item: I): ()=>void|null
+
+  // Disconnect all items in preparation for the index being removed (typically called for subindexes about to be removed)
+  internalClear()
+}
+```
+
+Each Index will likely use an internal structure to maintain information about each item, associating each item with this structure:
+
+```
+InternalIndexItem<I, K> {
+  item: I
+  onChangeCallback: ()=>(()=>void|null)
+  keyChangeDetecting: ChangeDetecting<K>|null
+  filterChangeDetecting: ChangeDetecting<boolean>|null
+}
+```
+
+This structure enables the IndexImpl functions:
+
+* it helps onChange by preserving the original key/filter across a change in the item, which helps onChange find the original item in the index's internal structure before figuring out where it should be moved to with its new key.
+* it helps internalAdd by knowing if an item has already been added
+* it helps internalRemove by preserving the key/filter so that the index knows where to find it to remove it.  It also helps the remove function remove() any ChangeDetecting structures.
+
+
+Note that an index needs to keep track of all items added to it, even those items whose filter returns false.  For those items, the public API will make it appear that the item is not in the index - it's not included in the count, it won't be returned by get(), etc.  However, the index still needs to track if the filter result changes, and it needs to remove() the ChangeDetectings associated with the item.  So the index still needs to have a handle on the item (and its InternalIndexItem), and be able to iterate over those items.
+
+This gets more complicated for many indexes, which don't actually store items but instead store references to subindexes that store the actual items.  In these cases, the filter attribute still applies at the parent index - if the filter returns false, then the item is not added to the subindexes.  So this means that even though the parent index doesn't actually store the item for use by the public API, it still needs to somehow track the internal state for those items so they can be disconnected from change detection.
+
+Given all that, this means that indexes that declare a filter will need to keep a separate Map from item to InternalIndexItem.  Indexes without a filter can just keep a WeakMap, since they can use their own internal structures to iterate over items.
+
+Implementation notes:
+
+```
+internalAdd(item) {
+  get the mapping from item to InternalIndexItem - either the WeakMap (for indexes without filters) or Map (for indexes with filters)
+  if InternalIndexItem exists then the item has already been added - return 0
+  
+  call the filter function (if any) with detectChanges, with a before callback set to call onChange and return onChange's return value
+  if the item is exluded by filter, return 0
+
+  call the key function (if any) with detectChanges, with a before callback set to call onChange and return onChange's return value
+
+  create the associated InternalIndexItem, add to the WeakMap or Map
+
+  if a unique index {
+    add the InternalIndexItem to the index's internal structures (set, array, BTree, etc.), according to the item's key (if any)
+    increment internal count
+    return 1
+  }
+  else (many index) {
+    check the index's internal structures to see if a subindex exists at the key.  Create and add a subindex if not
+    recursively call internalAdd on the subindex, return its result
+  }
+}
+
+internalRemove(item) {
+  get the mapping from item to InternalIndexItem - either the WeakMap (for indexes without filters) or Map (for indexes with filters)
+  if InternalIndexItem does not exist then the item wasn't added - return 0
+  
+  cleanup the InternalIndexItem's callbacks, making the appropriate remove() calls
+
+  get the existing filter value from the InternalIndexItem
+  if filtered out, then return 0
+
+  get the existing key from the InternalIndexItem (if any)
+
+  if a unique index {
+    remove the InternalIndexItem from the index's internal structures (set, array, BTree, etc.), according to the item's key (if any)
+    decrement internal count
+    return -1
+  }
+  else (many index) {
+    check the index's internal structures to see if a subindex exists at the key.  If not, create and add a subindex
+    recursively call internalAdd on the subindex, get its result
+    add the result to the internal count
+    return the result
+  }
+}
+
+onChange(item) {
+  // This part is called before the modification is made to the item
+  get the mapping from item to InternalIndexItem - either the WeakMap (for indexes without filters) or Map (for indexes with filters)
+  if InternalIndexItem does not exist then the item wasn't added - return null
+  
+  remember the old key and filter
+
+  result = 0
+
+  // This part gets called after the modification is made to item
+  return () => {
+    clear out the InternalIndexItem (calling remove() as appropriate)
+    compute the new key and filter with detectChanges, updating the InternalIndexItem
+    if either the new key or filter have changed {
+      if the old filter didn't exclude the item {
+        if a unique index {
+          remove the InternalIndexItem from the index's internal structures (set, array, BTree, etc.), according to the old key (if any)
+          decrement internal count
+          result -= 1
+        }
+        else (many index) {
+          find the appropriate subindex
+          result = internalRemove() called on the subindex, update internal count by the result
+          if that leaves the subindex empty (count == 0) {
+            internalClear() on the subindex
+            remove the subindex from the internal structures
+          }
+        }
+      }
+      if the new filter doesn't exclude the item {
+        if a unique index {
+          add the InternalIndexItem to the index's internal structures (set, array, BTree, etc.), according to the new key (if any)
+          increment internal count
+          result += 1
+        }
+        else (many index) {
+          find or create the appropriate subindex
+          addResult = call internalAdd() on the subindex
+          add addResult to internalCount
+          result += addResult
+        }
+      }
+    }
+
+    if addResult != 0 notify parent of possible change to count
+  }
+}
+
 ```
