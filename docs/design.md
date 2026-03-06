@@ -460,6 +460,32 @@ A Multindex contains a Set of items, implements the SetIndex interface, and also
 
 The only real special function of a Multindex is that its add and remove calls also need to be passed to the indexes contained in the Multindex. But aside from adding and removing, the Multindex lets those contained indexes run independently. For example, when adding to the contained indexes, the Multindex can ignore the countChange results, since the Multindex's count only depends on its own internal Set.
 
+### SortedIndex key ordering
+
+For comparing keys in SortedIndex, use the following rules:
+
+**Single key ordering:**
+- **strings**: Lexicographic comparison using `<` operator
+- **numbers**: Numeric comparison using `<` operator
+- **booleans**: `false < true`
+- **Dates**: Compare by `getTime()`
+- **null**: Sorts first (before all other values)
+- **undefined**: Sorts after null, before other values
+
+**Cross-type ordering** (when key types are mixed):
+```
+null < undefined < boolean < number < string < Date
+```
+
+**Compound key ordering:**
+- Compare element by element, left to right
+- First difference determines the overall ordering
+- If one key is a prefix of another, the shorter key comes first
+
+**Direction:**
+- `"asc"`: Normal ordering as described above
+- `"desc"`: Reversed ordering
+
 ### Separate Interface and Implementation trees
 
 The index implementations should all derive from IndexImplBase (or be Multindexes). The public-facing API derives from IndexBase. The easiest thing to do would be to have the index implementations directly implement the API interfaces. However, there may be name collisions between the interfaces and the implementation methods as described above.
