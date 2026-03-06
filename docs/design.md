@@ -465,6 +465,7 @@ The only real special function of a Multindex is that its add and remove calls a
 For comparing keys in SortedIndex, use the following rules:
 
 **Single key ordering:**
+
 - **strings**: Lexicographic comparison using `<` operator
 - **numbers**: Numeric comparison using `<` operator
 - **booleans**: `false < true`
@@ -473,16 +474,19 @@ For comparing keys in SortedIndex, use the following rules:
 - **undefined**: Sorts after null, before other values
 
 **Cross-type ordering** (when key types are mixed):
+
 ```
 null < undefined < boolean < number < string < Date
 ```
 
 **Compound key ordering:**
+
 - Compare element by element, left to right
 - First difference determines the overall ordering
 - If one key is a prefix of another, the shorter key comes first
 
 **Direction:**
+
 - `"asc"`: Normal ordering as described above
 - `"desc"`: Reversed ordering
 
