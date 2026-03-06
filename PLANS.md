@@ -8,7 +8,7 @@ implement step 1 from the [implementation plan](./docs/implementation-plan.md)
 
 ## Docs and References
 
-When working, refer to the [design document](./docs/design.md), with accompanying [design analysis](./docs/design-analysis.md).  You can also be informed by the [overview](./docs/overview.md), and the [overview-analysis](./docs/overview-analysis.md), although both may slowly become out of date.
+When working, refer to the [design document](./docs/design.md), with accompanying [design analysis](./docs/design-analysis.md). You can also be informed by the [overview](./docs/overview.md), and the [overview-analysis](./docs/overview-analysis.md), although both may slowly become out of date.
 
 ## TODO
 
@@ -17,4 +17,3 @@ When working, refer to the [design document](./docs/design.md), with accompanyin
 - Index events/observers (`onAdd`, `onRemove`, `onReindex`) for debugging and external integrations
 - Frozen/read-only mode (may need chchchchanges support)
 - Add concrete usage examples showing index construction and querying
-
