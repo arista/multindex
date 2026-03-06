@@ -134,7 +134,7 @@ ManyBTreeSpec<I, K, SUBIX extends Index<I>> = UniqueBTreeSpec<I, K> & {
   subindex: SubindexSpec<I, SUBIX>
 }
 
-SubindexSpec<I, SUBIX extends Index<I>> = (b: IndexBuilder) => Index
+SubindexSpec<I, SUBIX extends Index<I>> = (b: IndexBuilder) => Subindex<I>
 
 ```
 
@@ -196,18 +196,13 @@ Index filters allow an index to specify what items should be included in the ind
 * **added** - items that where add() has been called on the index, and remove() has not yet been called
 * **included** - items that are added **and** that pass the index's filter (if any)
 
-Each index's public API deals only with included items.  For example, count, get, iterators, etc. all only operate over included items.  From the API, the index will act like only **included** items were ever added to the index.
+Each index's public API deals only with included items.  For example, count, get, iterators, etc. all only operate over included items.  For users of the API, the index will act like only **included** items were ever added to the index.
 
 However, items that are added but not included still need to be managed by the index.  That's because an item might later be modified such that its filter now passes, and it can now be included.  This requires some extra bookkeeping by the index, namely to maintain and later cleanup the reactive callbacks involved.  So the index still needs to manage all **added** items, even if they are not yet **included**.
 
-
-
-
-
-
 ## Index Implementations
 
-These are the index implementations currently offered:
+The library offers a variety of index implementions:
 
 * SetIndexImpl - SetIndex backed by a JS Set
 * ArraySetIndexImpl - SetIndex backed by an Array, maintains items in the order they were added
@@ -219,149 +214,251 @@ These are the index implementations currently offered:
 * ManyBTreeArrayIndexImpl - SortedIndex backed by a BTree (implementation TBD), with subindex values
 * Multindex - effectively a SetIndexImpl, but with additional indexes
 
-Each of the implementations must implement these internal operations:
+One of the goals of the implementation design is for as much functionality as possible to be concentrated in a common base class, with the subclasses containing the specific structures needed for the individual types of indexes.
+
+This base class will support a combined set of features from all index types, such as filters, keys, and subindexes.  Some indexes will not make use of all these features, but they will all be available in the base class.
+
+### AddedItem
+
+Earlier it was mentioned that an index will need to maintain "bookkeeping" information about every added item, even the ones that are not included.  This structure describes that information, which makes use of types from the chchchchanges library.
 
 ```
-IndexImpl<I> {
-  // Adds the item to the internal structure, if not already there.  Updates the count appropriately.  If this is a keyed index, then the key is computed using a function wrapped for reactivity.  The callback function for the reactivity calls onChange.  If a filter is configured for the index, then the filter function is called, again with the same reactivity rules, and the item is only added if the result is true.  However, even if a filter does not add the item, the item still needs to be tracked in case its filter result changes, or if the item is removed.  Assumes that item is already change-enabled.  Returns the amount that the index's count changes.
-  internalAdd(item: I): number
-  
-  // Removes an item from the internal structure, if it's there.  Updates the count appropriately.  Returns the amount that the index's count changed
-  internalRemove(item: I): number
-  
-  // Set as the callback for changes detected when computing an item's key and filter value
-  onChange(item: I): ()=>void|null
-
-  // Disconnect all items in preparation for the index being removed (typically called for subindexes about to be removed)
-  internalClear()
-
-  // Add, remove, or get a value (item or subindex depending on the index type) with the given key from the internal structures representing the index (Set, Map, Array, BTree, etc.).  Different index implementations will override these methods to fit their internal structures
-  abstract internalAddItemWithKey(value: V, key: K)
-  abstract internalRemoveItemWithKey(value: V, key: K)
-  abstract internalGetItemWithKey(key: K): V | null
-}
-```
-
-Each Index will likely use an internal structure to maintain information about each item, associating each item with this structure:
-
-```
-InternalIndexItem<I, K> {
+AddedItem<I, K> {
   item: I
-  onChangeCallback: ()=>(()=>void|null)
+
   keyChangeDetecting: ChangeDetecting<K>|null
+  keyChangeCallback: ChangeCallback|null
+
   filterChangeDetecting: ChangeDetecting<boolean>|null
+  filterChangeCallback: ChangeCallback|null
+
+  // Clear out, call remove on any ChangeDetectings
+  clear()
+  
+  // Return keyChangeDetecting.result, default null
+  key: K|null
+  
+  // Return filterChangeDetecting.result, default true
+  included: boolean
+
+  // Runs the index's key function, wrapped in a detectChanges call using the keyChangeCallback, and places the result in keyChangeDetecting.  Default to null if no key
+  computeKey()
+
+  // Runs the index's filter function, wrapped in a detectChanges call using the filterChangeCallback, and places the result in filterChangeDetecting.  Default to true if no filter
+  computeFilter()
 }
 ```
 
-This structure enables the IndexImpl functions:
+When an item is added to a keyed index, the index's key function is called on the item to obtain its key.  This happens in the context of a chchchchanges detectChanges() call, so that the index can be alerted to any changes that might change the key, and therefore require the item to be re-indexed.  The keyChangeDetecting is the result of that call, containing both the computed key, as well as a remove() function to disconnect the reactive callbacks when the item is removed.  The filterChangeDetecting is the same, except that it determines if an item should be included, for indexes that supply a filter.
 
-* it helps onChange by preserving the original key/filter across a change in the item, which helps onChange find the original item in the index's internal structure before figuring out where it should be moved to with its new key.
-* it helps internalAdd by knowing if an item has already been added
-* it helps internalRemove by preserving the key/filter so that the index knows where to find it to remove it.  It also helps the remove function remove() any ChangeDetecting structures.
+Both detectChanges() calls must supply callbacks to be invoked if any values used by the key or filter change.  The callbacks will make the appropriate calls on the index (onItemKeyChange, onItemFilterChange).  The way chchchchanges works, each change requires the key/filter function to be re-run which results in re-generating the ChangeDetecting.  However, the ChangeCallbacks can be created once when the item is added, and reused.
 
+Every index needs to keep track of creating and removing AddedItem structures for each item added or removed.  Every index will therefore maintain a Map<I, AddedItem<I, K>>.  This mapping serves to both maintain the reactivity structures, as well as keeping track of added items vs. included items.
 
-Note that an index needs to keep track of all items added to it, even those items whose filter returns false.  For those items, the public API will make it appear that the item is not in the index - it's not included in the count, it won't be returned by get(), etc.  However, the index still needs to track if the filter result changes, and it needs to remove() the ChangeDetectings associated with the item.  So the index still needs to have a handle on the item (and its InternalIndexItem), and be able to iterate over those items.
+It may be that for some cases, this mapping can be optimized out:
 
-This gets more complicated for many indexes, which don't actually store items but instead store references to subindexes that store the actual items.  In these cases, the filter attribute still applies at the parent index - if the filter returns false, then the item is not added to the subindexes.  So this means that even though the parent index doesn't actually store the item for use by the public API, it still needs to somehow track the internal state for those items so they can be disconnected from change detection.
+* For indexes that have no keys or filters
+* For indexes that are not using the chchchchanges library for reactivity
 
-Given all that, this means that indexes that declare a filter will need to keep a separate Map from item to InternalIndexItem.  Indexes without a filter can just keep a WeakMap, since they can use their own internal structures to iterate over items.
+### IndexImplBase
 
-Implementation notes:
+The IndexImplBase is the base class for all index classes.  Its goal is to concentrate all common operations into a single base, and allow subclasses to deal solely with the parts that are specific to their particular data structures.
+
+IndexImplBase supports all the different index types and configurations:
+
+* indexes with keys (map, sorted, BTree)
+* indexes configured with filters
+* indexes with subindexes (many vs. unique)
+* indexes being used as subindexes, which need to keep track of their parent index, and the key within that parent that references the subindex
+* indexes that are or are not participating in chchchchanges reactivity
+
+As part of this, IndexImplBase needs to make use of several generic type parameters:
+
+* **I** - the type of the item
+* **S** - the type of the index's subindexes, null if none.  Must implement the Subindex interface described later
+* **V** - the type of the values stored by the index.  For Many indexes, this is S, for all others this is I
+* **K** - the type of the key used by the index, null if the index doesn't use keys
+* **P** - for indexes used as subindexes, the type of the parent index, null otherwise
+* **PK** - for indexes used as subindexes, the type of key used by the parent index
+
+With that in mind, the IndexImplBase looks like this:
 
 ```
-internalAdd(item) {
-  get the mapping from item to InternalIndexItem - either the WeakMap (for indexes without filters) or Map (for indexes with filters)
-  if InternalIndexItem exists then the item has already been added - return 0
+IndexImplBase<I, S, V, K, P, PK> {
+  parent: P
+  keyInParent: PK
+  // Created on demand
+  addedItems: Map<I, AddedItem<I, K>>|null
+
+  // The number of included items.  For many indexes, this is the total of included items in all subindexes.
+  count: number
+
+  // Pulled from the configurations of individual indexes
+  keyFn: ((item: I) => K)|null
+  filterFn: ((item: I) => boolean)|null
+  // This should assign the parent and key of the created subindex
+  subindexFn: ((key: K) => S)|null
+
+  // Functions implemented by index-specific subclasses
+  abstract getValueWithKey(key: K): V|null
+  abstract addValueWithKey(value: V, key: K)
+  abstract removeValueWithKey(value: V, key: K)
+  abstract clearValues() // clear out index-specific structures
+  abstract isUnique(): boolean
+
+  // Create an AddedItem with keyChangeCallback and filterChangeCallback filled in.  Both callbacks simply call the appropriate onKeyChange or onFilterChange method.  Then calls computeKey() and computeFilter() on the AddedItem.  The AddedItem is added to the addedItems map
+  createAddedItem(item: I): AddedItem<I, K>
+
+  // Returns the AddedItem for an item, null if the item has not yet been added
+  getAddedItem(item: I): AddedItem<I, K>|null
+
+  // Remove the AddedItem for the given item, returning it if it was added
+  removeAddedItem(item: I): AddedItem<I, K>|null
+
+  // Returns true if there are any added items, regardless of whether those items are included or not
+  hasAddedItems(): boolean
   
-  call the filter function (if any) with detectChanges, with a before callback set to call onChange and return onChange's return value
-  if the item is exluded by filter, return 0
+  // If this is a many index, this is called to indicate that a subindex's count changed, so that change should be reflected in this parent index.  This should also call recursively up the parent chain
+  subindexCountChanged(countChange: number)
 
-  call the key function (if any) with detectChanges, with a before callback set to call onChange and return onChange's return value
+  // Returns true if the two keys have equivalent values.  Indexes with compound sort keys will test for array element equality, all others will just use JS == equality (and use === for optimization)
+  keysEqual(k1: K, k2: K): boolean
 
-  create the associated InternalIndexItem, add to the WeakMap or Map
-
-  if a unique index {
-    internalAddItemWithKey
-    add the InternalIndexItem to the index's internal structures (set, array, BTree, etc.), according to the item's key (if any)
-    increment internal count
-    return 1
+  // Returns the subindex at the given key, creating it if it doesn't yet exist
+  getOrCreateSubindex(key: K): S {
+    return getValueWithKey() if non-null
+    subindex = subindexFn(key)
+    addValueWithKey(subindex, key)
+    return subindex
   }
-  else (many index) {
-    check the index's internal structures to see if a subindex exists at the key.  Create and add a subindex if not
-    recursively call internalAdd on the subindex, return its result
-  }
-}
 
-internalRemove(item) {
-  get the mapping from item to InternalIndexItem - either the WeakMap (for indexes without filters) or Map (for indexes with filters)
-  if InternalIndexItem does not exist then the item wasn't added - return 0
+  // Adds an item to the index.  
+  add(item: I): AddResult {
+    // Get the associated AddedItem
+    if getAddedItem(item) != null return {countChange: 0)
+    addedItem = createAddedItem(item)
+    return addAddedItem(item, addedItem.key, addedItem.included)
+  }
   
-  cleanup the InternalIndexItem's callbacks, making the appropriate remove() calls
-
-  get the existing filter value from the InternalIndexItem
-  if filtered out, then return 0
-
-  get the existing key from the InternalIndexItem (if any)
-
-  if a unique index {
-    remove the InternalIndexItem from the index's internal structures (set, array, BTree, etc.), according to the item's key (if any)
-    decrement internal count
-    return -1
+  addAddedItem(item: I, key: K, included: boolean): AddResult {
+    if !included return {countChange: 0}
+    if isUnique() {
+      if getItemWithKey(key) != null, uniqueness violation error
+      addValueWithKey(item, key)
+      count += 1
+      return {countChange: 1}
+    }
+    // Many index - values are subindexes
+    else {
+      subindex = getOrCreateSubindex(key)
+      addResult = subindex.add(item)
+      count += addResult.countChange
+      return addResult
+    }
   }
-  else (many index) {
-    check the index's internal structures to see if a subindex exists at the key.  If not, create and add a subindex
-    recursively call internalAdd on the subindex, get its result
-    add the result to the internal count
-    return the result
-  }
-}
 
-onChange(item) {
-  // This part is called before the modification is made to the item
-  get the mapping from item to InternalIndexItem - either the WeakMap (for indexes without filters) or Map (for indexes with filters)
-  if InternalIndexItem does not exist then the item wasn't added - return null
+  // Removes an item from the index
+  remove(item: I): RemoveResult {
+    addedItem = removeAddedItem(item)
+    if addedItem == null return {countChange: 0}
+    return removeAddedItem(item, addedItem.key, addedItem.included)
+  }
+
+  removeAddedItem(item: I, key: K, included: boolean): AddResult {
+    if isUnique() {
+      removeValueWithKey(item, key)
+      count -= 1
+      return {countChange: -1}
+    }
+    // Many index - values are subindexes
+    else {
+      subindex = getValueWithKey(key) // Should never be null
+      removeResult = subindex.remove(item)
+      checkForEmptySubindexAtKey(subindex, key)
+      count += removeResult.countChange
+      return removeResult
+    }
+  }
   
-  remember the old key and filter
+  onKeyChange(addedItem: AddedItem<I, K>) {
+    processChange(()=>addedItem.computeKey())
+  }
 
-  result = 0
+  onFilterChange(addedItem: AddedItem<I, K>) {
+    processChange(()=>addedItem.computeFilter())
+  }
 
-  // This part gets called after the modification is made to item
-  return () => {
-    clear out the InternalIndexItem (calling remove() as appropriate)
-    compute the new key and filter with detectChanges, updating the InternalIndexItem
-    if either the new key or filter have changed {
-      if the old filter didn't exclude the item {
-        if a unique index {
-          remove the InternalIndexItem from the index's internal structures (set, array, BTree, etc.), according to the old key (if any)
-          decrement internal count
-          result -= 1
-        }
-        else (many index) {
-          find the appropriate subindex
-          result = internalRemove() called on the subindex, update internal count by the result
-          if that leaves the subindex empty (count == 0) {
-            internalClear() on the subindex
-            remove the subindex from the internal structures
-          }
-        }
-      }
-      if the new filter doesn't exclude the item {
-        if a unique index {
-          add the InternalIndexItem to the index's internal structures (set, array, BTree, etc.), according to the new key (if any)
-          increment internal count
-          result += 1
-        }
-        else (many index) {
-          find or create the appropriate subindex
-          addResult = call internalAdd() on the subindex
-          add addResult to internalCount
-          result += addResult
-        }
+  processChange(addedItem: AddedItem<I, K>, change: ()=>void) {
+    item = addedItem.item
+    oldKey = addedItem.key
+    oldIncluded = addedItem.included
+    change()
+    newKey = addedItem.key
+    newIncluded = addedItem.included
+
+    // Make sure something actually changed
+    if !keysEqual(oldKey, newKey) || oldIncluded != newIncluded {
+      removeResult = removeAddedItem(item, oldKey, oldIncluded)
+      addResult = addAddedItem(item, newKey, newIncluded)
+
+      // Update count in self and parent
+      countChange = removeResult.countChange + addResult.countChange
+      if countChange != 0 {
+        count += countChange
+        if parent parent.subindexCountChanged(countChange)
       }
     }
+  }
 
-    if addResult != 0 notify parent of possible change to count
+  // Clear out all added items, and index-specific structures, disconnecting everything from reactive callbacks and structures
+  clear()
+
+  // Check if the given subindex is empty and can safely be removed in order to save memory.
+  checkForEmptySubindexAtKey(subindex: S, key: K) {
+    if !subindex.hasAddedItems() {
+      subindex.clear()
+      removeValueWithKey(key)
+    }
   }
 }
 
+AddResult {
+  // The amount by which the add operation changed the count of the index.
+  countChange: number
+}
+
+RemoveResult {
+  // The amount by which the remove operation changed the count of the index.
+  countChange: number
+}
+
+Subindex<I> {
+  add(item: I): AddResult
+  remove(item: I): RemoveResult
+  hasAddedItems(): boolean
+  clear()
+}
 ```
+
+### Multindex implementation
+
+A Multindex contains a Set of items, implements the SetIndex interface, and also has a remove() function.  Unlike other index implementations, it does not have filters, so there is no distinction between added items and included items.  In fact, the Multindex doesn't need the AddedItem structures at all.  It can just be a thin wrapper around a Set that implement SetIndex AND Subindex (so it can be used as a subindex).
+
+The only real special function of a Multindex is that its add and remove calls also need to be passed to the indexes contained in the Multindex.  But aside from adding and removing, the Multindex lets those contained indexes run independently.  For example, when adding to the contained indexes, the Multindex can ignore the countChange results, since the Multindex's count only depends on its own internal Set.
+
+### Separate Interface and Implementation trees
+
+The index implementations should all derive from IndexImplBase (or be Multindexes).  The public-facing API derives from IndexBase.  The easiest thing to do would be to have the index implementations directly implement the API interfaces.  However, there may be name collisions between the interfaces and the implementation methods as described above.
+
+If that's an issue, there are a couple options:
+
+* Just rename the implementation functions to get around collisions (e.g., "internalAdd" vs. "add")
+* Have the API implementations be thin shells that have pointers to the underlying implementations.  It adds a little complication since the Multindex builders need to track both the API interfaces (exposed as properties), and the internal implementations (called be add/remove).  However, it's also the case that some kind of "wrapper" is going to be needed anyway to handle SortedIndex.query and SortedIndex.reverse.
+
+### Reactive Index Structures
+
+An important aspect of the system is that it can participate in the chchchchanges reactive functionality.  As described earlier, this means that the indexes need to detect changes in the index and filter functions.
+
+But this also goes in the other direction, where an application might use the indexes, and want to know about changes made to the indexes themselves.  For example, an application might have a reactive function that retrieves the first item from a sorted index in a Multindex, and it might want to be notified if that value changes.
+
+In theory, this *might* just work.  The chchchchanges library already handles Sets, Maps, and Arrays, which would presumably be the underlying structures used in the index implementations.  As long as those implementations don't use those structures in strange or unexpected ways, it might all work out nicely.
