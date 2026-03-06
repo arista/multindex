@@ -37,7 +37,8 @@
     "prepublishOnly": "npm run check && npm run build"
   },
   "dependencies": {
-    "chchchchanges": "file:../chchchchanges"
+    "chchchchanges": "file:../chchchchanges",
+    "sorted-btree": "^2.1.0"
   },
   "devDependencies": {
     "@types/node": "^22",

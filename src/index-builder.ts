@@ -31,8 +31,10 @@ import { SetIndexImpl } from "./set-index-impl.js"
 import { ArraySetIndexImpl } from "./array-set-index-impl.js"
 import { UniqueMapIndexImpl } from "./unique-map-index-impl.js"
 import { UniqueSortedIndexImpl } from "./unique-sorted-index-impl.js"
+import { UniqueBTreeIndexImpl } from "./unique-btree-index-impl.js"
 import { ManyMapIndexImpl } from "./many-map-index-impl.js"
 import { ManySortedIndexImpl } from "./many-sorted-index-impl.js"
+import { ManyBTreeIndexImpl } from "./many-btree-index-impl.js"
 
 /**
  * Implementation of IndexBuilder.
@@ -87,12 +89,11 @@ export class IndexBuilderImpl<I> implements IndexBuilder<I> {
   }
 
   /**
-   * Create a unique sorted index backed by a BTree.
-   * Currently uses sorted array implementation as placeholder.
+   * Create a unique sorted index backed by a B+ tree.
+   * Provides better performance for large datasets with frequent insertions/deletions.
    */
   uniqueBTree<K extends SingleSortKey>(spec: UniqueBTreeSpec<I, K>): UniqueSortedIndex<I, K> {
-    // TODO: Implement BTree-backed version in Step 10
-    return new UniqueSortedIndexImpl<I, K>(this.domain, spec)
+    return new UniqueBTreeIndexImpl<I, K>(this.domain, spec)
   }
 
   // ===========================================================================
@@ -124,15 +125,14 @@ export class IndexBuilderImpl<I> implements IndexBuilder<I> {
   }
 
   /**
-   * Create a many sorted index backed by a BTree.
-   * Currently uses sorted array implementation as placeholder.
+   * Create a many sorted index backed by a B+ tree.
+   * Provides better performance for large datasets with frequent insertions/deletions.
    */
   manyBTree<K extends SingleSortKey, SUBIX extends IndexBase<I>>(
     spec: ManyBTreeSpec<I, K, SUBIX>,
   ): ManySortedIndex<I, SUBIX, K> {
-    // TODO: Implement BTree-backed version in Step 10
     const createSubindex = () => spec.subindex(this as IndexBuilder<I>)
-    return new ManySortedIndexImpl<I, K, SUBIX>(this.domain, spec, createSubindex)
+    return new ManyBTreeIndexImpl<I, K, SUBIX>(this.domain, spec, createSubindex)
   }
 
   // ===========================================================================
