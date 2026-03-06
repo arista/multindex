@@ -4,11 +4,11 @@ This document tracks the roadmap and planned features for brint
 
 ## Current Focus
 
-A first draft of [design](./docs/design.md) is complete, defining the API and implementation strategies.  Please take a look and see what you think, and please place your analysis in [design-analysis](./docs/design-analysis.md).
+implement step 1 from the [implementation plan](./docs/implementation-plan.md)
 
 ## Docs and References
 
-When working, refer to the [overview](./docs/overview.md), and the [overview-analysis](./docs/overview-analysis.md), although both may slowly become out of date.
+When working, refer to the [design document](./docs/design.md), with accompanying [design analysis](./docs/design-analysis.md).  You can also be informed by the [overview](./docs/overview.md), and the [overview-analysis](./docs/overview-analysis.md), although both may slowly become out of date.
 
 ## TODO
 
