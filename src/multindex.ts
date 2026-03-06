@@ -2,6 +2,7 @@
  * Multindex - A collection with multiple indexes
  */
 
+import type { ChangeDomain } from "chchchchanges"
 import type { Multindex, SetIndex, IndexBase } from "./interfaces.js"
 import type { IndexBuilder, IndexBuilderFn } from "./specs.js"
 import type { MultindexConfig } from "./types.js"
@@ -29,10 +30,14 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
   private readonly itemSet = new Set<I>()
   private readonly indexes: IXS
   private readonly indexList: IndexBase<I>[]
+  private readonly domain: ChangeDomain | null
+  private readonly reactive: boolean
 
-  private constructor(indexes: IXS) {
+  private constructor(indexes: IXS, domain: ChangeDomain | null, reactive: boolean) {
     this.indexes = indexes
     this.indexList = Object.values(indexes)
+    this.domain = domain
+    this.reactive = reactive
   }
 
   /**
@@ -47,10 +52,11 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
     config?: MultindexConfig,
   ): Multindex<I> & IXS {
     const domain = config?.domain ?? null
-    const builder = new IndexBuilderImpl<I>(domain)
+    const reactive = config?.reactive ?? true
+    const builder = new IndexBuilderImpl<I>(reactive ? domain : null)
     const indexes = builderFn(builder as IndexBuilder<I>)
 
-    const multindex = new MultindexImpl<I, IXS>(indexes)
+    const multindex = new MultindexImpl<I, IXS>(indexes, domain, reactive)
 
     // Copy index properties onto the multindex instance
     for (const [key, value] of Object.entries(indexes)) {
@@ -90,18 +96,26 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
 
   /**
    * Add an item to the Multindex and all contained indexes.
-   * Returns the item (potentially wrapped in a reactive proxy in the future).
+   * When reactive mode is enabled, the item is wrapped in a reactive proxy
+   * and changes to its properties will automatically trigger re-indexing.
+   * Returns the (possibly wrapped) item.
    */
   add(item: I): I {
+    // Wrap in reactive proxy if reactive mode is enabled
+    let trackedItem = item
+    if (this.reactive && this.domain && typeof item === "object" && item !== null) {
+      trackedItem = this.domain.enableChanges(item)
+    }
+
     // Add to main set
-    this.itemSet.add(item)
+    this.itemSet.add(trackedItem)
 
     // Add to all contained indexes
     for (const index of this.indexList) {
-      index.add(item)
+      index.add(trackedItem)
     }
 
-    return item
+    return trackedItem
   }
 
   /**
