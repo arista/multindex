@@ -154,6 +154,9 @@ PK = the partial key type used for SortedIndex sublists.  For compound keys ([K1
 IndexBase<I> extends Iterable<I> {
   count: number
   items: IterableIterator<I>
+  
+  // This can only be called on top-level Multindexes, or subindexes.  If called on a top-level Multindex, then the item is wrapped in a reactive Proxy (if reactivity is enabled for the Multindex), added to all the contained indexes, and the reactive Proxy is returned.
+  // If called on a subindex, then the item will be modified to have its key match the subindex's key within its parent.  It will also call this recursively up the parent chain.  The item's key is set using key setter methods supplied by the index's config.  If any conditions are not met (setter method not supplied, not a subindex, etc.) then an error is thrown.
   add(item: I): I
 }
 
@@ -283,10 +286,10 @@ IndexImplBase supports all the different index types and configurations:
 As part of this, IndexImplBase needs to make use of several generic type parameters:
 
 * **I** - the type of the item
-* **S** - the type of the index's subindexes, null if none.  Must implement the Subindex interface described later
+* **S** - the type of the index's subindexes, null if none.  Must implement the SubindexImpl interface described later
 * **V** - the type of the values stored by the index.  For Many indexes, this is S, for all others this is I
 * **K** - the type of the key used by the index, null if the index doesn't use keys
-* **P** - for indexes used as subindexes, the type of the parent index, null otherwise
+* **P** - for indexes used as subindexes, the type of the parent index, null otherwise.  Note that a Multindex is NOT considered a parent of the indexes it contains.  But if a Multindex is used as a subindex, then its contained indexes will have their parents set to the Multindex's parent.
 * **PK** - for indexes used as subindexes, the type of key used by the parent index
 
 With that in mind, the IndexImplBase looks like this:
@@ -440,7 +443,7 @@ RemoveResult {
   countChange: number
 }
 
-Subindex<I> {
+SubindexImpl<I> {
   add(item: I): AddResult
   remove(item: I): RemoveResult
   hasAddedItems(): boolean
