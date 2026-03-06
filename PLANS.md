@@ -4,9 +4,7 @@ This document tracks the roadmap and planned features for brint
 
 ## Current Focus
 
-Prepare an implementation plan to implement the design document.  Divide the implementation into logical parts that would also be easy to review.
-
-The first step should be setting up the generic scaffolding for a TypeScript project.  Look at chchchanges and brint for examples of how you've set up these projects in the past.  Don't start getting into the specifics of the project until the second step.
+implement step 1 from the [implementation plan](./docs/implementation-plan.md)
 
 ## Docs and References
 
