@@ -23,7 +23,12 @@ IndexBuilderFn<IXS> = (b: IndexBuilder) => IXS
 
 MultindexConfig {
   domain?: ChangeDomain // From chchchchanges
-  // FIXME - other config?
+
+  // When true (the default), items added to the Multindex are wrapped in chchchchanges
+  // reactivity, and the index automatically re-indexes items when their keys or filter
+  // values change. When false, no reactivity overhead is incurred, but items will not
+  // be automatically re-indexed on change.
+  reactive?: boolean // Default: true
 }
 
 IndexBuilder<I> {
