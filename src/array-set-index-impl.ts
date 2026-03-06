@@ -12,13 +12,12 @@ import { IndexImplBase, SubindexImpl, getFilterFn } from "./index-impl-base.js"
  * SetIndex implementation backed by a JavaScript Array.
  *
  * Items are stored in an array to maintain insertion order.
- * Uses a Map for O(1) lookup of item positions.
+ * Designed for small sets where O(n) operations are acceptable.
  *
  * @typeParam I - The item type
  */
 export class ArraySetIndexImpl<I> extends IndexImplBase<I, I> implements SetIndex<I> {
   private readonly array: I[] = []
-  private readonly indexMap = new Map<I, number>()
 
   constructor(domain: ChangeDomain | null, spec?: ArraySetSpec<I>) {
     super({
@@ -35,35 +34,30 @@ export class ArraySetIndexImpl<I> extends IndexImplBase<I, I> implements SetInde
   // ===========================================================================
 
   protected getValueWithKey(key: I): I | SubindexImpl<I> | null {
-    return this.indexMap.has(key) ? key : null
+    return this.array.includes(key) ? key : null
   }
 
   protected addValueWithKey(value: I | SubindexImpl<I>): void {
     const item = value as I
-    if (!this.indexMap.has(item)) {
-      this.indexMap.set(item, this.array.length)
+    if (!this.array.includes(item)) {
       this.array.push(item)
     }
   }
 
   protected removeValueWithKey(key: I): void {
-    const index = this.indexMap.get(key)
-    if (index !== undefined) {
+    const index = this.array.indexOf(key)
+    if (index !== -1) {
       // Remove from array by swapping with last element
       const lastIndex = this.array.length - 1
       if (index !== lastIndex) {
-        const lastItem = this.array[lastIndex]!
-        this.array[index] = lastItem
-        this.indexMap.set(lastItem, index)
+        this.array[index] = this.array[lastIndex]!
       }
       this.array.pop()
-      this.indexMap.delete(key)
     }
   }
 
   protected clearValues(): void {
     this.array.length = 0
-    this.indexMap.clear()
   }
 
   protected isUnique(): boolean {
@@ -93,8 +87,7 @@ export class ArraySetIndexImpl<I> extends IndexImplBase<I, I> implements SetInde
    * Check if an item is in the index (and passes the filter)
    */
   has(item: I): boolean {
-    const addedItem = this.getAddedItem(item)
-    return addedItem !== null && addedItem.included && this.indexMap.has(item)
+    return this.array.includes(item)
   }
 
   /**
@@ -115,12 +108,7 @@ export class ArraySetIndexImpl<I> extends IndexImplBase<I, I> implements SetInde
    * Internal generator for included items in insertion order
    */
   private *includedItems(): IterableIterator<I> {
-    for (const item of this.array) {
-      const addedItem = this.getAddedItem(item)
-      if (addedItem && addedItem.included) {
-        yield item
-      }
-    }
+    yield* this.array
   }
 
   // ===========================================================================

@@ -76,8 +76,7 @@ export class SetIndexImpl<I> extends IndexImplBase<I, I> implements SetIndex<I> 
    * Check if an item is in the index (and passes the filter)
    */
   has(item: I): boolean {
-    const addedItem = this.getAddedItem(item)
-    return addedItem !== null && addedItem.included && this.set.has(item)
+    return this.set.has(item)
   }
 
   /**
@@ -98,12 +97,7 @@ export class SetIndexImpl<I> extends IndexImplBase<I, I> implements SetIndex<I> 
    * Internal generator for included items
    */
   private *includedItems(): IterableIterator<I> {
-    for (const item of this.set) {
-      const addedItem = this.getAddedItem(item)
-      if (addedItem && addedItem.included) {
-        yield item
-      }
-    }
+    yield* this.set
   }
 
   // ===========================================================================

@@ -411,11 +411,15 @@ export abstract class IndexImplBase<I, K> {
    * Remove an item from the index
    */
   remove(item: I): RemoveResult {
-    const addedItem = this.removeAddedItem(item)
+    const addedItem = this.getAddedItem(item)
     if (!addedItem) {
       return { countChange: 0 }
     }
-    return this.removeIncludedItem(item, addedItem.key, addedItem.included)
+    // Capture key and included before clearing the AddedItem
+    const key = addedItem.key
+    const included = addedItem.included
+    this.removeAddedItem(item)
+    return this.removeIncludedItem(item, key, included)
   }
 
   /**
