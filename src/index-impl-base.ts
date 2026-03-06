@@ -370,9 +370,9 @@ export abstract class IndexImplBase<I, K> {
   // ===========================================================================
 
   /**
-   * Add an item to the index
+   * Add an item to the index (returns AddResult for internal/subindex use)
    */
-  add(item: I): AddResult {
+  addInternal(item: I): AddResult {
     // Check if already added
     if (this.getAddedItem(item) !== null) {
       return { countChange: 0 }
@@ -411,11 +411,15 @@ export abstract class IndexImplBase<I, K> {
    * Remove an item from the index
    */
   remove(item: I): RemoveResult {
-    const addedItem = this.removeAddedItem(item)
+    const addedItem = this.getAddedItem(item)
     if (!addedItem) {
       return { countChange: 0 }
     }
-    return this.removeIncludedItem(item, addedItem.key, addedItem.included)
+    // Capture key and included before clearing the AddedItem
+    const key = addedItem.key
+    const included = addedItem.included
+    this.removeAddedItem(item)
+    return this.removeIncludedItem(item, key, included)
   }
 
   /**
