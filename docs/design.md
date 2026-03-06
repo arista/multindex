@@ -8,16 +8,17 @@ Technical design for Multindex
 ### Building Multindexes
 
 ```
-Multindex<I> {
-  static create<I>(f: IndexBuilderFn, config?: MultindexConfig): MIXS
-  
-  add(item: I): I
-  remove(item: I)
+// A Multindex is a SetIndex that contains additional indexes defined by the application.  Items added to the Multindex are added to all of those additional indexes.  Multindex also has a remove function that removes an item from the Multindex and all its additional indexes.
+
+Multindex<I> extends SetIndex<I> {
+  static create<I, IXS>(f: IndexBuilderFn<IXS>, config?: MultindexConfig): Multindex<I> & IXS
+
+  // Remove an item from the Multindex and all its contained indexes
+  remove(item: I): I
 }
 
-IndexBuilderFn = (b: IndexBuilder) => IXS
-
-where IXS is a mapping from name to index type, and MIXS is a Multindex that implements that mapping
+// The IndexBuilderFn should return a mapping from name to index implementation (supplied by the IndexBuilder).  Those mappings will become properties of a Multindex
+IndexBuilderFn<IXS> = (b: IndexBuilder) => IXS
 
 
 MultindexConfig {
@@ -26,7 +27,7 @@ MultindexConfig {
 }
 
 IndexBuilder<I> {
-  // Allow app to choose different index characteristics and, in some cases, actual implementations (e.g., set vs. arraySet, sorted vs. BTree)
+  // Allow the app to choose different index characteristics and, in some cases, actual implementations (e.g., set vs. arraySet, sorted vs. BTree).  This is used to build indexes contained by a top-level Multindex, and also subindexes.
 
   set(spec?: SetSpec<I>) => SetIndex
   arraySet(spec?: ArraySetSpec<I>) => SetIndex
@@ -38,7 +39,10 @@ IndexBuilder<I> {
   manyMap<K>(spec: ManyMapSpec<I, K>) =>  ManyMapIndex<I, K>
   manySorted<K>(spec: ManySortedSpec<I, K>) =>  ManySortedIndex<I, K>
   manyBTree<K>(spec: ManyBTreeSpec<I, K>) =>  ManyBTreeIndex<I, K>
-  
+
+  // Returns a multindex implementation that acts like a Set, but also contains additional indexes defined by f.  The result is similar to a Multindex, except that it doesn't have a "remove" method
+  mult(f: IndexBuilderFn<IXS>) => SetIndex & IXS
+
   // helper functions
   key<K>(get: (item: I) => K, set?: (item: I, value: K) => void) => MapKeySpec<I, K>
   asc<K extends SingleSortKey>(get: (item: I) => K, set?: (item: I, value: K) => void) => SingleSortKeySpec<I, K>
@@ -118,19 +122,19 @@ PartialSortKey<CK> =
 
 
 
-ManyMapSpec<I, K, SUBIX extends Index<I>> = UniqueMapSpec<I, K> {
+ManyMapSpec<I, K, SUBIX extends Index<I>> = UniqueMapSpec<I, K> & {
   subindex: SubindexSpec<I, SUBIX>
 }
 
-ManySortedSpec<I, K, SUBIX extends Index<I>> = UniqueSortedSpec<I, K> {
+ManySortedSpec<I, K, SUBIX extends Index<I>> = UniqueSortedSpec<I, K> & {
   subindex: SubindexSpec<I, SUBIX>
 }
 
-ManyBTreeSpec<I, K, SUBIX extends Index<I>> = UniqueBTreeSpec<I, K> {
+ManyBTreeSpec<I, K, SUBIX extends Index<I>> = UniqueBTreeSpec<I, K> & {
   subindex: SubindexSpec<I, SUBIX>
 }
 
-SubindexSpec<I, SUBIX extends Index<I>> = (b: IndexBuilder) => Index or Multindex
+SubindexSpec<I, SUBIX extends Index<I>> = (b: IndexBuilder) => Index
 
 ```
 
@@ -185,6 +189,22 @@ UniqueSortedIndex<I, K> extends SortedIndex<I, I, K>
 ManySortedIndex<I, V, K> extends SortedIndex<I, V, K>
 ```
 
+## Index Filters
+
+Index filters allow an index to specify what items should be included in the index.  This can get a little confusing because, as will be explained later, there needs to be a distinction between items that have been **added** to the index, vs. items that are **included** in the index.
+
+* **added** - items that where add() has been called on the index, and remove() has not yet been called
+* **included** - items that are added **and** that pass the index's filter (if any)
+
+Each index's public API deals only with included items.  For example, count, get, iterators, etc. all only operate over included items.  From the API, the index will act like only **included** items were ever added to the index.
+
+However, items that are added but not included still need to be managed by the index.  That's because an item might later be modified such that its filter now passes, and it can now be included.  This requires some extra bookkeeping by the index, namely to maintain and later cleanup the reactive callbacks involved.  So the index still needs to manage all **added** items, even if they are not yet **included**.
+
+
+
+
+
+
 ## Index Implementations
 
 These are the index implementations currently offered:
@@ -197,6 +217,7 @@ These are the index implementations currently offered:
 * ManySortedIndexImpl - SortedIndex backed by a JS Array, with subindex values
 * UniqueBTreeArrayIndexImpl - SortedIndex backed by a BTree (implementation TBD)
 * ManyBTreeArrayIndexImpl - SortedIndex backed by a BTree (implementation TBD), with subindex values
+* Multindex - effectively a SetIndexImpl, but with additional indexes
 
 Each of the implementations must implement these internal operations:
 
@@ -213,6 +234,11 @@ IndexImpl<I> {
 
   // Disconnect all items in preparation for the index being removed (typically called for subindexes about to be removed)
   internalClear()
+
+  // Add, remove, or get a value (item or subindex depending on the index type) with the given key from the internal structures representing the index (Set, Map, Array, BTree, etc.).  Different index implementations will override these methods to fit their internal structures
+  abstract internalAddItemWithKey(value: V, key: K)
+  abstract internalRemoveItemWithKey(value: V, key: K)
+  abstract internalGetItemWithKey(key: K): V | null
 }
 ```
 
@@ -255,6 +281,7 @@ internalAdd(item) {
   create the associated InternalIndexItem, add to the WeakMap or Map
 
   if a unique index {
+    internalAddItemWithKey
     add the InternalIndexItem to the index's internal structures (set, array, BTree, etc.), according to the item's key (if any)
     increment internal count
     return 1
