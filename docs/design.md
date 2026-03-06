@@ -116,15 +116,15 @@ SortKey = SingleSortKey | CompoundSortKey
 
 SingleSortKey = null | undefined | boolean | string | number | Date
 
-// Does it make sense to explicitly list out tuple types of up to N elements?  Or is there a TS way to express tuple types such that partial key types (below) can be derived from them?
+// Explicitly define types for CompoundSortKeySpecs and CompoundSortKey of up to 6 sort keys
 CompoundSortKeySpec = tuple of SingleSortKeySpec
 
 CompoundSortKey = tuple of the key types from the compound SortKeySpecs
 
+// Explicitly define these types knowing that CompoundSortKeys can be up to 6 keys long
 PartialSortKey<CK> =
   if CK is a SingleSortKey, then return CK
   if CK is a tuple of SingleSortKeys, then return the union of all subarrays of CK starting with index 0.  For example, if CK is [K1, K2, K3], then return [] | [K1] | [K1, K2] | [K1, K2, K3]
-
 
 
 ManyMapSpec<I, K, SUBIX extends Index<I>> = UniqueMapSpec<I, K> & {
@@ -169,12 +169,15 @@ MapIndex<I, V, K> extends SetIndex<I> {
   keys: IterableIterator<K>
 }
 
-SortedIndex<I, V, K, PK> extends MapIndex<I, V, K> {
-  // Returns a version of the SortedIndex where iteration runs in reverse order
-  reverse(): SortedIndex<I, V, K, PK>
+SortedIndex<I, V, K, PK> extends MapIndex<I, V, K>, SortedView<I, PK> {
+}
+
+SortedView<I, PK> extends Iterable<I> {
+  // Returns a version of the SortedIndex where iteration and comparisons run in reverse order
+  reverse(): SortedView<I, PK>
 
   // Returns a version of the SortedIndex whose keys are bounded by the given range
-  query(q: SortQuery): SortedIndex<I, V, K, PK>
+  query(q: SortQuery): SortedView<I, PK>
 }
 
 // Note: at most one of gt/ge may be specified, same for lt/le

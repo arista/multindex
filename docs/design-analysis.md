@@ -170,8 +170,8 @@ The `mult` function (line 44) returns `SetIndex & IXS` without `remove()`. The r
 
 Items to address before implementation:
 
-- [ ] Specify maximum compound key arity (recommend 4-5)
-- [ ] Introduce `SortedView` interface for `query()`/`reverse()` results - specify live, read-only, chainable behavior
+- [x] Specify maximum compound key arity (recommend 4-5) - chose 6
+- [x] Introduce `SortedView` interface for `query()`/`reverse()` results - specify live, read-only, chainable behavior
 - [ ] Spec out `add()` on subindexes - recursive key-setting behavior
 - [x] Document that `add()` wraps objects in chchchchanges reactivity
 - [ ] Clarify key equality: `===` for primitives, shallow element comparison for compound key arrays
