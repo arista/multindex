@@ -4,11 +4,13 @@ This document tracks the roadmap and planned features for brint
 
 ## Current Focus
 
-A first draft of [design](./docs/design.md) is complete, defining the API and implementation strategies.  Please take a look and see what you think, and please place your analysis in [design-analysis](./docs/design-analysis.md).
+Prepare an implementation plan to implement the design document.  Divide the implementation into logical parts that would also be easy to review.
+
+The first step should be setting up the generic scaffolding for a TypeScript project.  Look at chchchanges and brint for examples of how you've set up these projects in the past.  Don't start getting into the specifics of the project until the second step.
 
 ## Docs and References
 
-When working, refer to the [overview](./docs/overview.md), and the [overview-analysis](./docs/overview-analysis.md), although both may slowly become out of date.
+When working, refer to the [design document](./docs/design.md), with accompanying [design analysis](./docs/design-analysis.md).  You can also be informed by the [overview](./docs/overview.md), and the [overview-analysis](./docs/overview-analysis.md), although both may slowly become out of date.
 
 ## TODO
 
