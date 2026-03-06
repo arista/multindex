@@ -174,10 +174,10 @@ Items to address before implementation:
 - [x] Introduce `SortedView` interface for `query()`/`reverse()` results - specify live, read-only, chainable behavior
 - [x] Spec out `add()` on subindexes - recursive key-setting behavior
 - [x] Document that `add()` wraps objects in chchchchanges reactivity
-- [ ] Clarify key equality: `===` for primitives, shallow element comparison for compound key arrays
+- [x] Clarify key equality: `===` for primitives, shallow element comparison for compound key arrays
 - [x] Add `reactive?: boolean` to `MultindexConfig` for non-reactive mode
 - [x] Change `Multindex.remove()` return type to `void`
-- [ ] Move `computeKey()`/`computeFilter()` from `AddedItem` to index methods
+- [x] Move `computeKey()`/`computeFilter()` from `AddedItem` to index methods
 - [ ] Add 1-2 concrete usage examples showing index construction and querying
 
 ## Conclusion

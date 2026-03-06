@@ -251,12 +251,6 @@ AddedItem<I, K> {
   
   // Return filterChangeDetecting.result, default true
   included: boolean
-
-  // Runs the index's key function, wrapped in a detectChanges call using the keyChangeCallback, and places the result in keyChangeDetecting.  Default to null if no key
-  computeKey()
-
-  // Runs the index's filter function, wrapped in a detectChanges call using the filterChangeCallback, and places the result in filterChangeDetecting.  Default to true if no filter
-  computeFilter()
 }
 ```
 
@@ -317,7 +311,7 @@ IndexImplBase<I, S, V, K, P, PK> {
   abstract clearValues() // clear out index-specific structures
   abstract isUnique(): boolean
 
-  // Create an AddedItem with keyChangeCallback and filterChangeCallback filled in.  Both callbacks simply call the appropriate onKeyChange or onFilterChange method.  Then calls computeKey() and computeFilter() on the AddedItem.  The AddedItem is added to the addedItems map
+  // Create an AddedItem with keyChangeCallback and filterChangeCallback filled in.  Both callbacks simply call the appropriate onKeyChange or onFilterChange method.  Then calls computeKey() and computeFilter() for the AddedItem.  The AddedItem is added to the addedItems map
   createAddedItem(item: I): AddedItem<I, K>
 
   // Returns the AddedItem for an item, null if the item has not yet been added
@@ -332,7 +326,17 @@ IndexImplBase<I, S, V, K, P, PK> {
   // If this is a many index, this is called to indicate that a subindex's count changed, so that change should be reflected in this parent index.  This should also call recursively up the parent chain
   subindexCountChanged(countChange: number)
 
-  // Returns true if the two keys have equivalent values.  Indexes with compound sort keys will test for array element equality, all others will just use JS == equality (and use === for optimization)
+  // Runs the index's key function, wrapped in a detectChanges call using the keyChangeCallback, and places the result in keyChangeDetecting.  Default to null if no key
+  computeKey(addedItem: AddedItem<I, K>)
+
+  // Runs the index's filter function, wrapped in a detectChanges call using the filterChangeCallback, and places the result in filterChangeDetecting.  Default to true if no filter
+  computeFilter(addedItem: AddedItem<I, K>)
+
+  // Returns true if the two keys have equivalent values.
+  // - For primitive keys (string, number, boolean, null, undefined): uses === comparison
+  // - For Date keys: compares using getTime()
+  // - For compound keys (arrays): performs shallow comparison, applying these rules to each element
+  // Note: Other object keys are compared by reference (===), not by value
   keysEqual(k1: K, k2: K): boolean
 
   // Returns the subindex at the given key, creating it if it doesn't yet exist
@@ -392,11 +396,11 @@ IndexImplBase<I, S, V, K, P, PK> {
   }
   
   onKeyChange(addedItem: AddedItem<I, K>) {
-    processChange(addedItem, ()=>addedItem.computeKey())
+    processChange(addedItem, ()=>this.computeKey(addedItem))
   }
 
   onFilterChange(addedItem: AddedItem<I, K>) {
-    processChange(addedItem, ()=>addedItem.computeFilter())
+    processChange(addedItem, ()=>this.computeFilter(addedItem))
   }
 
   processChange(addedItem: AddedItem<I, K>, change: ()=>void) {
