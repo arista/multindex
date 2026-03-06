@@ -1,0 +1,169 @@
+/**
+ * Multindex - A collection with multiple indexes
+ */
+
+import type { Multindex, SetIndex, IndexBase } from "./interfaces.js"
+import type { IndexBuilder, IndexBuilderFn } from "./specs.js"
+import type { MultindexConfig } from "./types.js"
+import { IndexBuilderImpl } from "./index-builder.js"
+
+/**
+ * Internal interface for indexes that support item removal
+ */
+interface RemovableIndex<I> extends IndexBase<I> {
+  remove?(item: I): void
+}
+
+/**
+ * Multindex implementation.
+ *
+ * A Multindex is a SetIndex that contains additional named indexes.
+ * Items added to the Multindex are automatically added to all contained indexes.
+ *
+ * @typeParam I - The item type
+ * @typeParam IXS - The type of the indexes object
+ */
+class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
+  implements Multindex<I>, SetIndex<I>
+{
+  private readonly itemSet = new Set<I>()
+  private readonly indexes: IXS
+  private readonly indexList: IndexBase<I>[]
+
+  private constructor(indexes: IXS) {
+    this.indexes = indexes
+    this.indexList = Object.values(indexes)
+  }
+
+  /**
+   * Create a new Multindex with the given indexes.
+   *
+   * @param builderFn - Function that receives an IndexBuilder and returns named indexes
+   * @param config - Optional configuration
+   * @returns A Multindex with the indexes as properties
+   */
+  static create<I, IXS extends Record<string, IndexBase<I>>>(
+    builderFn: IndexBuilderFn<I, IXS>,
+    config?: MultindexConfig,
+  ): Multindex<I> & IXS {
+    const domain = config?.domain ?? null
+    const builder = new IndexBuilderImpl<I>(domain)
+    const indexes = builderFn(builder as IndexBuilder<I>)
+
+    const multindex = new MultindexImpl<I, IXS>(indexes)
+
+    // Copy index properties onto the multindex instance
+    for (const [key, value] of Object.entries(indexes)) {
+      ;(multindex as unknown as Record<string, unknown>)[key] = value
+    }
+
+    return multindex as unknown as Multindex<I> & IXS
+  }
+
+  /**
+   * The number of items in the Multindex
+   */
+  get count(): number {
+    return this.itemSet.size
+  }
+
+  /**
+   * Iterator over all items
+   */
+  get items(): IterableIterator<I> {
+    return this.itemSet.values()
+  }
+
+  /**
+   * Make the Multindex iterable
+   */
+  [Symbol.iterator](): Iterator<I> {
+    return this.itemSet.values()
+  }
+
+  /**
+   * Check if an item is in the Multindex
+   */
+  has(item: I): boolean {
+    return this.itemSet.has(item)
+  }
+
+  /**
+   * Add an item to the Multindex and all contained indexes.
+   * Returns the item (potentially wrapped in a reactive proxy in the future).
+   */
+  add(item: I): I {
+    // Add to main set
+    this.itemSet.add(item)
+
+    // Add to all contained indexes
+    for (const index of this.indexList) {
+      index.add(item)
+    }
+
+    return item
+  }
+
+  /**
+   * Remove an item from the Multindex and all contained indexes.
+   */
+  remove(item: I): void {
+    // Remove from main set
+    this.itemSet.delete(item)
+
+    // Remove from all contained indexes
+    for (const index of this.indexList) {
+      const removable = index as RemovableIndex<I>
+      if (removable.remove) {
+        removable.remove(item)
+      }
+    }
+  }
+
+  /**
+   * Clear all items from the Multindex and all contained indexes.
+   */
+  clear(): void {
+    this.itemSet.clear()
+
+    for (const index of this.indexList) {
+      const clearable = index as IndexBase<I> & { clear?(): void }
+      if (clearable.clear) {
+        clearable.clear()
+      }
+    }
+  }
+}
+
+/**
+ * Create a new Multindex.
+ *
+ * @example
+ * ```typescript
+ * interface User {
+ *   id: number
+ *   name: string
+ *   department: string
+ * }
+ *
+ * const users = createMultindex<User>()((b) => ({
+ *   byId: b.uniqueMap({ key: (u) => u.id }),
+ *   byDepartment: b.manyMap({
+ *     key: (u) => u.department,
+ *     subindex: (b) => b.set(),
+ *   }),
+ * }))
+ *
+ * users.add({ id: 1, name: "Alice", department: "Engineering" })
+ * users.byId.get(1) // { id: 1, name: "Alice", department: "Engineering" }
+ * users.byDepartment.get("Engineering").count // 1
+ * ```
+ */
+export function createMultindex<I>() {
+  return function <IXS extends Record<string, IndexBase<I>>>(
+    builderFn: IndexBuilderFn<I, IXS>,
+    config?: MultindexConfig,
+  ): Multindex<I> & IXS {
+    return MultindexImpl.create(builderFn, config)
+  }
+}
