@@ -370,9 +370,9 @@ export abstract class IndexImplBase<I, K> {
   // ===========================================================================
 
   /**
-   * Add an item to the index
+   * Add an item to the index (returns AddResult for internal/subindex use)
    */
-  add(item: I): AddResult {
+  addInternal(item: I): AddResult {
     // Check if already added
     if (this.getAddedItem(item) !== null) {
       return { countChange: 0 }
