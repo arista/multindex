@@ -4,13 +4,17 @@ This document tracks the roadmap and planned features for brint
 
 ## Current Focus
 
-This is the start of a typescript library.  Look at the [overview](./docs/overview.md) and see if it makes sense, where some of the holes might be, your opinion on some of the discussions there, etc.  Put the results in [overview-analysis](./docs/overview-analysis.md).
+A first draft of [design](./docs/design.md) is complete, defining the API and implementation strategies.  Please take a look and see what you think, and please place your analysis in [design-analysis](./docs/design-analysis.md).
 
-I've added my responses to the analysis document.  Please let me know what you think.  Perhaps you can add your own responses in the same sort of format.
+## Docs and References
 
-## Docs and references
-
-When working, refer to the [overview](./docs/overview.md).
+When working, refer to the [overview](./docs/overview.md), and the [overview-analysis](./docs/overview-analysis.md), although both may slowly become out of date.
 
 ## TODO
+
+- Convenience methods: `isEmpty`, `first()`/`last()` on SortedIndex, bulk operations (`addAll`, `removeAll`), `toArray()`
+- Index serialization/deserialization for persistence and transfer
+- Index events/observers (`onAdd`, `onRemove`, `onReindex`) for debugging and external integrations
+- Frozen/read-only mode (may need chchchchanges support)
+- Add concrete usage examples showing index construction and querying
 
