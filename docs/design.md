@@ -4,7 +4,6 @@ Technical design for Multindex
 
 ## Public API
 
-
 ### Building Multindexes
 
 ```
@@ -103,7 +102,7 @@ SortKeySpec = SingleSortKeySpec | CompoundSortKeySpec
 SingleSortKeySpec<I, K extends SingleSortKey> =
   GetterSingleSortKeySpec<I, K> // Defaults to "asc" direction
   | FullSingleSortKeySpec<I, K>
-  
+
 GetterSingleSortKeySpec<I, K extends SingleSortKey> = (item: I) => K
 
 FullSingleSortKeySpec<I, K extends SingleSortKey> = {
@@ -154,7 +153,7 @@ PK = the partial key type used for SortedIndex sublists.  For compound keys ([K1
 IndexBase<I> extends Iterable<I> {
   count: number
   items: IterableIterator<I>
-  
+
   // This can only be called on top-level Multindexes, or subindexes.  If called on a top-level Multindex, then the item is wrapped in a reactive Proxy (if reactivity is enabled for the Multindex), added to all the contained indexes, and the reactive Proxy is returned.
   // If called on a subindex, then the item will be modified to have its key match the subindex's key within its parent.  It will also call this recursively up the parent chain.  The item's key is set using key setter methods supplied by the index's config.  If any conditions are not met (setter method not supplied, not a subindex, etc.) then an error is thrown.
   add(item: I): I
@@ -202,36 +201,36 @@ ManySortedIndex<I, V, K> extends SortedIndex<I, V, K>
 
 ## Index Filters
 
-Index filters allow an index to specify what items should be included in the index.  This can get a little confusing because, as will be explained later, there needs to be a distinction between items that have been **added** to the index, vs. items that are **included** in the index.
+Index filters allow an index to specify what items should be included in the index. This can get a little confusing because, as will be explained later, there needs to be a distinction between items that have been **added** to the index, vs. items that are **included** in the index.
 
-* **added** - items that where add() has been called on the index, and remove() has not yet been called
-* **included** - items that are added **and** that pass the index's filter (if any)
+- **added** - items that where add() has been called on the index, and remove() has not yet been called
+- **included** - items that are added **and** that pass the index's filter (if any)
 
-Each index's public API deals only with included items.  For example, count, get, iterators, etc. all only operate over included items.  For users of the API, the index will act like only **included** items were ever added to the index.
+Each index's public API deals only with included items. For example, count, get, iterators, etc. all only operate over included items. For users of the API, the index will act like only **included** items were ever added to the index.
 
-However, items that are added but not included still need to be managed by the index.  That's because an item might later be modified such that its filter now passes, and it can now be included.  This requires some extra bookkeeping by the index, namely to maintain and later cleanup the reactive callbacks involved.  So the index still needs to manage all **added** items, even if they are not yet **included**.
+However, items that are added but not included still need to be managed by the index. That's because an item might later be modified such that its filter now passes, and it can now be included. This requires some extra bookkeeping by the index, namely to maintain and later cleanup the reactive callbacks involved. So the index still needs to manage all **added** items, even if they are not yet **included**.
 
 ## Index Implementations
 
 The library offers a variety of index implementions:
 
-* SetIndexImpl - SetIndex backed by a JS Set
-* ArraySetIndexImpl - SetIndex backed by an Array, maintains items in the order they were added
-* UniqueMapIndexImpl - MapIndex backed by a JS Map
-* ManyMapIndexImpl - MapIndex backed by a JS Map, with subindex values
-* UniqueSortedIndexImpl - SortedIndex backed by a JS Array
-* ManySortedIndexImpl - SortedIndex backed by a JS Array, with subindex values
-* UniqueBTreeArrayIndexImpl - SortedIndex backed by a BTree (implementation TBD)
-* ManyBTreeArrayIndexImpl - SortedIndex backed by a BTree (implementation TBD), with subindex values
-* Multindex - effectively a SetIndexImpl, but with additional indexes
+- SetIndexImpl - SetIndex backed by a JS Set
+- ArraySetIndexImpl - SetIndex backed by an Array, maintains items in the order they were added
+- UniqueMapIndexImpl - MapIndex backed by a JS Map
+- ManyMapIndexImpl - MapIndex backed by a JS Map, with subindex values
+- UniqueSortedIndexImpl - SortedIndex backed by a JS Array
+- ManySortedIndexImpl - SortedIndex backed by a JS Array, with subindex values
+- UniqueBTreeArrayIndexImpl - SortedIndex backed by a BTree (implementation TBD)
+- ManyBTreeArrayIndexImpl - SortedIndex backed by a BTree (implementation TBD), with subindex values
+- Multindex - effectively a SetIndexImpl, but with additional indexes
 
 One of the goals of the implementation design is for as much functionality as possible to be concentrated in a common base class, with the subclasses containing the specific structures needed for the individual types of indexes.
 
-This base class will support a combined set of features from all index types, such as filters, keys, and subindexes.  Some indexes will not make use of all these features, but they will all be available in the base class.
+This base class will support a combined set of features from all index types, such as filters, keys, and subindexes. Some indexes will not make use of all these features, but they will all be available in the base class.
 
 ### AddedItem
 
-Earlier it was mentioned that an index will need to maintain "bookkeeping" information about every added item, even the ones that are not included.  This structure describes that information, which makes use of types from the chchchchanges library.
+Earlier it was mentioned that an index will need to maintain "bookkeeping" information about every added item, even the ones that are not included. This structure describes that information, which makes use of types from the chchchchanges library.
 
 ```
 AddedItem<I, K> {
@@ -245,46 +244,46 @@ AddedItem<I, K> {
 
   // Clear out, call remove on any ChangeDetectings
   clear()
-  
+
   // Return keyChangeDetecting.result, default null
   key: K|null
-  
+
   // Return filterChangeDetecting.result, default true
   included: boolean
 }
 ```
 
-When an item is added to a keyed index, the index's key function is called on the item to obtain its key.  This happens in the context of a chchchchanges detectChanges() call, so that the index can be alerted to any changes that might change the key, and therefore require the item to be re-indexed.  The keyChangeDetecting is the result of that call, containing both the computed key, as well as a remove() function to disconnect the reactive callbacks when the item is removed.  The filterChangeDetecting is the same, except that it determines if an item should be included, for indexes that supply a filter.
+When an item is added to a keyed index, the index's key function is called on the item to obtain its key. This happens in the context of a chchchchanges detectChanges() call, so that the index can be alerted to any changes that might change the key, and therefore require the item to be re-indexed. The keyChangeDetecting is the result of that call, containing both the computed key, as well as a remove() function to disconnect the reactive callbacks when the item is removed. The filterChangeDetecting is the same, except that it determines if an item should be included, for indexes that supply a filter.
 
-Both detectChanges() calls must supply callbacks to be invoked if any values used by the key or filter change.  The callbacks will make the appropriate calls on the index (onItemKeyChange, onItemFilterChange).  The way chchchchanges works, each change requires the key/filter function to be re-run which results in re-generating the ChangeDetecting.  However, the ChangeCallbacks can be created once when the item is added, and reused.
+Both detectChanges() calls must supply callbacks to be invoked if any values used by the key or filter change. The callbacks will make the appropriate calls on the index (onItemKeyChange, onItemFilterChange). The way chchchchanges works, each change requires the key/filter function to be re-run which results in re-generating the ChangeDetecting. However, the ChangeCallbacks can be created once when the item is added, and reused.
 
-Every index needs to keep track of creating and removing AddedItem structures for each item added or removed.  Every index will therefore maintain a Map<I, AddedItem<I, K>>.  This mapping serves to both maintain the reactivity structures, as well as keeping track of added items vs. included items.
+Every index needs to keep track of creating and removing AddedItem structures for each item added or removed. Every index will therefore maintain a Map<I, AddedItem<I, K>>. This mapping serves to both maintain the reactivity structures, as well as keeping track of added items vs. included items.
 
 It may be that for some cases, this mapping can be optimized out:
 
-* For indexes that have no keys or filters
-* For indexes that are not using the chchchchanges library for reactivity
+- For indexes that have no keys or filters
+- For indexes that are not using the chchchchanges library for reactivity
 
 ### IndexImplBase
 
-The IndexImplBase is the base class for all index classes.  Its goal is to concentrate all common operations into a single base, and allow subclasses to deal solely with the parts that are specific to their particular data structures.
+The IndexImplBase is the base class for all index classes. Its goal is to concentrate all common operations into a single base, and allow subclasses to deal solely with the parts that are specific to their particular data structures.
 
 IndexImplBase supports all the different index types and configurations:
 
-* indexes with keys (map, sorted, BTree)
-* indexes configured with filters
-* indexes with subindexes (many vs. unique)
-* indexes being used as subindexes, which need to keep track of their parent index, and the key within that parent that references the subindex
-* indexes that are or are not participating in chchchchanges reactivity
+- indexes with keys (map, sorted, BTree)
+- indexes configured with filters
+- indexes with subindexes (many vs. unique)
+- indexes being used as subindexes, which need to keep track of their parent index, and the key within that parent that references the subindex
+- indexes that are or are not participating in chchchchanges reactivity
 
 As part of this, IndexImplBase needs to make use of several generic type parameters:
 
-* **I** - the type of the item
-* **S** - the type of the index's subindexes, null if none.  Must implement the SubindexImpl interface described later
-* **V** - the type of the values stored by the index.  For Many indexes, this is S, for all others this is I
-* **K** - the type of the key used by the index, null if the index doesn't use keys
-* **P** - for indexes used as subindexes, the type of the parent index, null otherwise.  Note that a Multindex is NOT considered a parent of the indexes it contains.  But if a Multindex is used as a subindex, then its contained indexes will have their parents set to the Multindex's parent.
-* **PK** - for indexes used as subindexes, the type of key used by the parent index
+- **I** - the type of the item
+- **S** - the type of the index's subindexes, null if none. Must implement the SubindexImpl interface described later
+- **V** - the type of the values stored by the index. For Many indexes, this is S, for all others this is I
+- **K** - the type of the key used by the index, null if the index doesn't use keys
+- **P** - for indexes used as subindexes, the type of the parent index, null otherwise. Note that a Multindex is NOT considered a parent of the indexes it contains. But if a Multindex is used as a subindex, then its contained indexes will have their parents set to the Multindex's parent.
+- **PK** - for indexes used as subindexes, the type of key used by the parent index
 
 With that in mind, the IndexImplBase looks like this:
 
@@ -322,7 +321,7 @@ IndexImplBase<I, S, V, K, P, PK> {
 
   // Returns true if there are any added items, regardless of whether those items are included or not
   hasAddedItems(): boolean
-  
+
   // If this is a many index, this is called to indicate that a subindex's count changed, so that change should be reflected in this parent index.  This should also call recursively up the parent chain
   subindexCountChanged(countChange: number)
 
@@ -347,14 +346,14 @@ IndexImplBase<I, S, V, K, P, PK> {
     return subindex
   }
 
-  // Adds an item to the index.  
+  // Adds an item to the index.
   add(item: I): AddResult {
     // Get the associated AddedItem
     if getAddedItem(item) != null return {countChange: 0)
     addedItem = createAddedItem(item)
     return addAddedItem(item, addedItem.key, addedItem.included)
   }
-  
+
   addAddedItem(item: I, key: K, included: boolean): AddResult {
     if !included return {countChange: 0}
     if isUnique() {
@@ -394,7 +393,7 @@ IndexImplBase<I, S, V, K, P, PK> {
       return removeResult
     }
   }
-  
+
   onKeyChange(addedItem: AddedItem<I, K>) {
     processChange(addedItem, ()=>this.computeKey(addedItem))
   }
@@ -457,23 +456,23 @@ SubindexImpl<I> {
 
 ### Multindex implementation
 
-A Multindex contains a Set of items, implements the SetIndex interface, and also has a remove() function.  Unlike other index implementations, it does not have filters, so there is no distinction between added items and included items.  In fact, the Multindex doesn't need the AddedItem structures at all.  It can just be a thin wrapper around a Set that implement SetIndex AND Subindex (so it can be used as a subindex).
+A Multindex contains a Set of items, implements the SetIndex interface, and also has a remove() function. Unlike other index implementations, it does not have filters, so there is no distinction between added items and included items. In fact, the Multindex doesn't need the AddedItem structures at all. It can just be a thin wrapper around a Set that implement SetIndex AND Subindex (so it can be used as a subindex).
 
-The only real special function of a Multindex is that its add and remove calls also need to be passed to the indexes contained in the Multindex.  But aside from adding and removing, the Multindex lets those contained indexes run independently.  For example, when adding to the contained indexes, the Multindex can ignore the countChange results, since the Multindex's count only depends on its own internal Set.
+The only real special function of a Multindex is that its add and remove calls also need to be passed to the indexes contained in the Multindex. But aside from adding and removing, the Multindex lets those contained indexes run independently. For example, when adding to the contained indexes, the Multindex can ignore the countChange results, since the Multindex's count only depends on its own internal Set.
 
 ### Separate Interface and Implementation trees
 
-The index implementations should all derive from IndexImplBase (or be Multindexes).  The public-facing API derives from IndexBase.  The easiest thing to do would be to have the index implementations directly implement the API interfaces.  However, there may be name collisions between the interfaces and the implementation methods as described above.
+The index implementations should all derive from IndexImplBase (or be Multindexes). The public-facing API derives from IndexBase. The easiest thing to do would be to have the index implementations directly implement the API interfaces. However, there may be name collisions between the interfaces and the implementation methods as described above.
 
 If that's an issue, there are a couple options:
 
-* Just rename the implementation functions to get around collisions (e.g., "internalAdd" vs. "add")
-* Have the API implementations be thin shells that have pointers to the underlying implementations.  It adds a little complication since the Multindex builders need to track both the API interfaces (exposed as properties), and the internal implementations (called be add/remove).  However, it's also the case that some kind of "wrapper" is going to be needed anyway to handle SortedIndex.query and SortedIndex.reverse.
+- Just rename the implementation functions to get around collisions (e.g., "internalAdd" vs. "add")
+- Have the API implementations be thin shells that have pointers to the underlying implementations. It adds a little complication since the Multindex builders need to track both the API interfaces (exposed as properties), and the internal implementations (called be add/remove). However, it's also the case that some kind of "wrapper" is going to be needed anyway to handle SortedIndex.query and SortedIndex.reverse.
 
 ### Reactive Index Structures
 
-An important aspect of the system is that it can participate in the chchchchanges reactive functionality.  As described earlier, this means that the indexes need to detect changes in the index and filter functions.
+An important aspect of the system is that it can participate in the chchchchanges reactive functionality. As described earlier, this means that the indexes need to detect changes in the index and filter functions.
 
-But this also goes in the other direction, where an application might use the indexes, and want to know about changes made to the indexes themselves.  For example, an application might have a reactive function that retrieves the first item from a sorted index in a Multindex, and it might want to be notified if that value changes.
+But this also goes in the other direction, where an application might use the indexes, and want to know about changes made to the indexes themselves. For example, an application might have a reactive function that retrieves the first item from a sorted index in a Multindex, and it might want to be notified if that value changes.
 
-In theory, this *might* just work.  The chchchchanges library already handles Sets, Maps, and Arrays, which would presumably be the underlying structures used in the index implementations.  As long as those implementations don't use those structures in strange or unexpected ways, it might all work out nicely.
+In theory, this _might_ just work. The chchchchanges library already handles Sets, Maps, and Arrays, which would presumably be the underlying structures used in the index implementations. As long as those implementations don't use those structures in strange or unexpected ways, it might all work out nicely.

@@ -7,6 +7,7 @@ This document outlines the implementation plan for Multindex, divided into logic
 Set up the TypeScript project structure following the pattern from chchchchanges and brint.
 
 **Files to create:**
+
 - `package.json` - with dependency on `chchchchanges` (file:../chchchchanges)
 - `tsconfig.json` - ES2022 target, strict mode
 - `tsup.config.ts` - ESM and CJS builds with types
@@ -24,6 +25,7 @@ Set up the TypeScript project structure following the pattern from chchchchanges
 Define all public-facing interfaces and types from the design document.
 
 **Files:**
+
 - `src/types.ts` - Core types (SingleSortKey, SortKey, PartialSortKey, etc.)
 - `src/interfaces.ts` - Index interfaces (IndexBase, SetIndex, MapIndex, SortedIndex, SortedView)
 - `src/specs.ts` - Builder specs (SetSpec, UniqueMapSpec, SortedKeySpec, FilterSpec, etc.)
@@ -37,6 +39,7 @@ Define all public-facing interfaces and types from the design document.
 Implement the core internal structures that all indexes depend on.
 
 **Files:**
+
 - `src/added-item.ts` - AddedItem structure for tracking reactive state
 - `src/index-impl-base.ts` - IndexImplBase with:
   - addedItems Map management
@@ -52,6 +55,7 @@ Implement the core internal structures that all indexes depend on.
 Implement the simplest index types.
 
 **Files:**
+
 - `src/set-index-impl.ts` - SetIndexImpl backed by JS Set
 - `src/array-set-index-impl.ts` - ArraySetIndexImpl backed by Array (maintains insertion order)
 
@@ -62,6 +66,7 @@ Implement the simplest index types.
 Implement unique key-to-item mapping.
 
 **Files:**
+
 - `src/unique-map-index-impl.ts` - UniqueMapIndexImpl backed by JS Map
 
 **Verification:** Tests for add, remove, get, tryGet, hasKey, keys iteration, uniqueness violation errors
@@ -71,6 +76,7 @@ Implement unique key-to-item mapping.
 Implement key-to-subindex mapping, introducing subindex handling.
 
 **Files:**
+
 - `src/many-map-index-impl.ts` - ManyMapIndexImpl with subindex creation and management
 - `src/subindex-impl.ts` - SubindexImpl interface refinements if needed
 
@@ -81,6 +87,7 @@ Implement key-to-subindex mapping, introducing subindex handling.
 Implement sorted indexes with query and reverse support.
 
 **Files:**
+
 - `src/sorted-view-impl.ts` - SortedView implementation (live, chainable views)
 - `src/unique-sorted-index-impl.ts` - UniqueSortedIndexImpl backed by sorted Array
 - `src/many-sorted-index-impl.ts` - ManySortedIndexImpl with subindexes
@@ -92,6 +99,7 @@ Implement sorted indexes with query and reverse support.
 Implement the top-level Multindex and the builder API.
 
 **Files:**
+
 - `src/multindex.ts` - Multindex implementation
 - `src/index-builder.ts` - IndexBuilder with all builder methods
 - Update `src/index.ts` - Export Multindex.create and all public APIs
@@ -103,6 +111,7 @@ Implement the top-level Multindex and the builder API.
 Ensure full integration with chchchchanges.
 
 **Files:**
+
 - Updates to existing implementations for reactive wrapping on add()
 - Tests with reactive: true (default) and reactive: false
 
@@ -113,6 +122,7 @@ Ensure full integration with chchchchanges.
 Implement BTree-backed sorted indexes for better scaling.
 
 **Files:**
+
 - `src/unique-btree-index-impl.ts`
 - `src/many-btree-index-impl.ts`
 
@@ -138,6 +148,7 @@ Each step is implemented on its own branch: `nsa-implementation-{step number}`
 ## Review Strategy
 
 Each step produces a reviewable PR:
+
 1. Steps 1-2: Foundation (scaffolding + types)
 2. Steps 3-4: Basic indexes (AddedItem + Set implementations)
 3. Steps 5-6: Map indexes (Unique + Many)

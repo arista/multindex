@@ -1,0 +1,53 @@
+{
+  "name": "multindex",
+  "version": "0.0.1",
+  "description": "Reactive multi-indexed collections for TypeScript",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "node --import tsx --test test/**/*.test.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
+    "prepublishOnly": "npm run check && npm run build"
+  },
+  "dependencies": {
+    "chchchchanges": "file:../chchchchanges"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "eslint": "^9",
+    "eslint-config-prettier": "^10",
+    "globals": "^16",
+    "prettier": "^3",
+    "tsup": "^8",
+    "tsx": "^4",
+    "typescript": "^5",
+    "typescript-eslint": "^8"
+  }
+}
