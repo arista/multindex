@@ -78,3 +78,6 @@ export {
   KeySetterRequiredError,
   InvalidOperationError,
 } from "./errors.js"
+
+// Multindex factory
+export { createMultindex } from "./multindex.js"

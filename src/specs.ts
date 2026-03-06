@@ -294,7 +294,7 @@ export interface IndexBuilder<I> {
   ): ManySortedIndex<I, SUBIX, K>
 
   // Nested multindex (for subindexes)
-  mult<IXS>(f: IndexBuilderFn<I, IXS>): SetIndex<I> & IXS
+  mult<IXS extends Record<string, IndexBase<I>>>(f: IndexBuilderFn<I, IXS>): SetIndex<I> & IXS
 
   // Helper functions for creating key specs
   key<K>(get: (item: I) => K, set?: (item: I, value: K) => void): FullMapKeySpec<I, K>
