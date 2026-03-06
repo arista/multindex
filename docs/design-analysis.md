@@ -166,6 +166,20 @@ The `mult` function (line 44) returns `SetIndex & IXS` without `remove()`. The r
 
 > Author's response: I also just realized that I never specified that add() is supposed to wrap the object in chchchchanges reactivity
 
+## Design Document Checklist
+
+Items to address before implementation:
+
+- [ ] Specify maximum compound key arity (recommend 4-5)
+- [ ] Introduce `SortedView` interface for `query()`/`reverse()` results - specify live, read-only, chainable behavior
+- [ ] Spec out `add()` on subindexes - recursive key-setting behavior
+- [ ] Document that `add()` wraps objects in chchchchanges reactivity
+- [ ] Clarify key equality: `===` for primitives, shallow element comparison for compound key arrays
+- [ ] Add `reactive?: boolean` to `MultindexConfig` for non-reactive mode
+- [ ] Change `Multindex.remove()` return type to `void`
+- [ ] Move `computeKey()`/`computeFilter()` from `AddedItem` to index methods
+- [ ] Add 1-2 concrete usage examples showing index construction and querying
+
 ## Conclusion
 
 The design is solid overall, with good abstractions and careful attention to the complex interactions between filters, keys, subindexes, and reactivity. The main areas needing attention are:
