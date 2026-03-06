@@ -14,7 +14,7 @@ Multindex<I> extends SetIndex<I> {
   static create<I, IXS>(f: IndexBuilderFn<IXS>, config?: MultindexConfig): Multindex<I> & IXS
 
   // Remove an item from the Multindex and all its contained indexes
-  remove(item: I): I
+  remove(item: I)
 }
 
 // The IndexBuilderFn should return a mapping from name to index implementation (supplied by the IndexBuilder).  Those mappings will become properties of a Multindex
@@ -134,7 +134,7 @@ ManyBTreeSpec<I, K, SUBIX extends Index<I>> = UniqueBTreeSpec<I, K> & {
   subindex: SubindexSpec<I, SUBIX>
 }
 
-SubindexSpec<I, SUBIX extends Index<I>> = (b: IndexBuilder) => Subindex<I>
+SubindexSpec<I, SUBIX extends Index<I>> = (b: IndexBuilder) => Subindex<I, SUBIX>
 
 ```
 
@@ -381,11 +381,11 @@ IndexImplBase<I, S, V, K, P, PK> {
   }
   
   onKeyChange(addedItem: AddedItem<I, K>) {
-    processChange(()=>addedItem.computeKey())
+    processChange(addedItem, ()=>addedItem.computeKey())
   }
 
   onFilterChange(addedItem: AddedItem<I, K>) {
-    processChange(()=>addedItem.computeFilter())
+    processChange(addedItem, ()=>addedItem.computeFilter())
   }
 
   processChange(addedItem: AddedItem<I, K>, change: ()=>void) {
