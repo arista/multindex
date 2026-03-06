@@ -1,5 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert"
+import { Changes } from "chchchchanges"
 import { createMultindex } from "../src/index.js"
 
 interface User {
@@ -294,6 +295,154 @@ describe("createMultindex", () => {
       assert.strictEqual(users.byName.hasKey("Alice"), false)
       assert.strictEqual(users.byDepartment.get("Engineering").count, 1)
       assert.strictEqual(users.seniors.count, 1) // only Carol now
+    })
+  })
+
+  describe("reactivity", () => {
+    it("should return a reactive proxy from add() when domain is provided", () => {
+      const domain = Changes.create()
+      const users = createMultindex<User>()(
+        (b) => ({
+          byId: b.uniqueMap({ key: (u) => u.id }),
+        }),
+        { domain },
+      )
+
+      const alice = { id: 1, name: "Alice", department: "Engineering", age: 30 }
+      const trackedAlice = users.add(alice)
+
+      // The returned item should be a proxy (different reference)
+      assert.notStrictEqual(trackedAlice, alice)
+      // But should have the same values
+      assert.strictEqual(trackedAlice.id, 1)
+      assert.strictEqual(trackedAlice.name, "Alice")
+    })
+
+    it("should automatically re-index when a map key changes", () => {
+      const domain = Changes.create()
+      const users = createMultindex<User>()(
+        (b) => ({
+          byDepartment: b.manyMap({
+            key: (u) => u.department,
+            subindex: (b) => b.set(),
+          }),
+        }),
+        { domain },
+      )
+
+      const alice = { id: 1, name: "Alice", department: "Engineering", age: 30 }
+      const trackedAlice = users.add(alice)
+
+      assert.strictEqual(users.byDepartment.get("Engineering").count, 1)
+      assert.strictEqual(users.byDepartment.hasKey("Sales"), false)
+
+      // Change the department - should trigger re-indexing
+      trackedAlice.department = "Sales"
+
+      assert.strictEqual(users.byDepartment.get("Sales").count, 1)
+      assert.strictEqual(users.byDepartment.hasKey("Engineering"), false)
+    })
+
+    it("should automatically re-index when a sorted key changes", () => {
+      const domain = Changes.create()
+      const users = createMultindex<User>()(
+        (b) => ({
+          byAge: b.uniqueSorted({ key: (u) => u.age }),
+        }),
+        { domain },
+      )
+
+      const alice = { id: 1, name: "Alice", department: "Engineering", age: 30 }
+      const bob = { id: 2, name: "Bob", department: "Engineering", age: 25 }
+
+      const trackedAlice = users.add(alice)
+      users.add(bob)
+
+      // Initially: bob (25), alice (30)
+      let items = Array.from(users.byAge)
+      assert.strictEqual(items[0]!.name, "Bob")
+      assert.strictEqual(items[1]!.name, "Alice")
+
+      // Change Alice's age to be younger than Bob
+      trackedAlice.age = 20
+
+      // Now: alice (20), bob (25)
+      items = Array.from(users.byAge)
+      assert.strictEqual(items[0]!.name, "Alice")
+      assert.strictEqual(items[1]!.name, "Bob")
+    })
+
+    it("should automatically re-index when a filter condition changes", () => {
+      const domain = Changes.create()
+      const users = createMultindex<User>()(
+        (b) => ({
+          seniors: b.set({ filter: (u) => u.age >= 30 }),
+        }),
+        { domain },
+      )
+
+      const alice = { id: 1, name: "Alice", department: "Engineering", age: 25 }
+      const trackedAlice = users.add(alice)
+
+      // Alice is not a senior (age 25)
+      assert.strictEqual(users.seniors.count, 0)
+
+      // Change Alice's age to make her a senior
+      trackedAlice.age = 30
+
+      // Now Alice should be in seniors
+      assert.strictEqual(users.seniors.count, 1)
+      assert.strictEqual(users.seniors.has(trackedAlice), true)
+    })
+
+    it("should not re-index when reactive is false", () => {
+      const domain = Changes.create()
+      const users = createMultindex<User>()(
+        (b) => ({
+          byDepartment: b.manyMap({
+            key: (u) => u.department,
+            subindex: (b) => b.set(),
+          }),
+        }),
+        { domain, reactive: false },
+      )
+
+      const alice = { id: 1, name: "Alice", department: "Engineering", age: 30 }
+      const returnedAlice = users.add(alice)
+
+      // With reactive: false, the original item is returned (not wrapped)
+      assert.strictEqual(returnedAlice, alice)
+
+      assert.strictEqual(users.byDepartment.get("Engineering").count, 1)
+
+      // Change the department - should NOT trigger re-indexing
+      alice.department = "Sales"
+
+      // Still in Engineering (no automatic re-indexing)
+      assert.strictEqual(users.byDepartment.get("Engineering").count, 1)
+      assert.strictEqual(users.byDepartment.hasKey("Sales"), false)
+    })
+
+    it("should work with has() and remove() using the tracked item", () => {
+      const domain = Changes.create()
+      const users = createMultindex<User>()(
+        (b) => ({
+          byId: b.uniqueMap({ key: (u) => u.id }),
+        }),
+        { domain },
+      )
+
+      const alice = { id: 1, name: "Alice", department: "Engineering", age: 30 }
+      const trackedAlice = users.add(alice)
+
+      assert.strictEqual(users.has(trackedAlice), true)
+      assert.strictEqual(users.count, 1)
+
+      users.remove(trackedAlice)
+
+      assert.strictEqual(users.has(trackedAlice), false)
+      assert.strictEqual(users.count, 0)
+      assert.strictEqual(users.byId.hasKey(1), false)
     })
   })
 })
