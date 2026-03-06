@@ -178,7 +178,6 @@ Items to address before implementation:
 - [x] Add `reactive?: boolean` to `MultindexConfig` for non-reactive mode
 - [x] Change `Multindex.remove()` return type to `void`
 - [x] Move `computeKey()`/`computeFilter()` from `AddedItem` to index methods
-- [ ] Add 1-2 concrete usage examples showing index construction and querying
 
 ## Conclusion
 

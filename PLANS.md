@@ -16,4 +16,5 @@ When working, refer to the [overview](./docs/overview.md), and the [overview-ana
 - Index serialization/deserialization for persistence and transfer
 - Index events/observers (`onAdd`, `onRemove`, `onReindex`) for debugging and external integrations
 - Frozen/read-only mode (may need chchchchanges support)
+- Add concrete usage examples showing index construction and querying
 
