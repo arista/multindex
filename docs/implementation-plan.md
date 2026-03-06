@@ -2,6 +2,8 @@
 
 This document outlines the implementation plan for Multindex, divided into logical, reviewable steps.
 
+implement each step on branch nsa-implementation-{step number}. When finished, mark the step as complete, and update PLANS.md as to which step is next.
+
 ## Step 1: Project Scaffolding
 
 Set up the TypeScript project structure following the pattern from chchchchanges and brint.

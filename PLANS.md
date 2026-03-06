@@ -4,7 +4,7 @@ This document tracks the roadmap and planned features for brint
 
 ## Current Focus
 
-implement step 1 from the [implementation plan](./docs/implementation-plan.md)
+implement step 3 from the [implementation plan](./docs/implementation-plan.md)
 
 ## Docs and References
 
