@@ -4,7 +4,7 @@ This document tracks the roadmap and planned features for brint
 
 ## Current Focus
 
-implement step 3 from the [implementation plan](./docs/implementation-plan.md)
+I added a notion of superindexes to the design.md document.  Please give your thoughts, and prepare to implement.
 
 ## Docs and References
 
