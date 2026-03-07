@@ -298,6 +298,231 @@ describe("createMultindex", () => {
     })
   })
 
+  describe("superindex", () => {
+    it("should propagate add to superindex", () => {
+      // Create a superindex for all entities
+      const allEntities = createMultindex<{ id: number }>()(
+        (b) => ({
+          byId: b.uniqueMap({ key: (e) => e.id }),
+        }),
+      )
+
+      // Create a child multindex that propagates to the superindex
+      const users = createMultindex<User>()(
+        (b) => ({
+          byName: b.uniqueMap({ key: (u) => u.name }),
+        }),
+        { superindex: allEntities },
+      )
+
+      const alice = { id: 1, name: "Alice", department: "Engineering", age: 30 }
+      users.add(alice)
+
+      // Should be in both indexes
+      assert.strictEqual(users.count, 1)
+      assert.strictEqual(users.has(alice), true)
+      assert.strictEqual(allEntities.count, 1)
+      assert.strictEqual(allEntities.has(alice), true)
+      assert.strictEqual(allEntities.byId.get(1), alice)
+    })
+
+    it("should propagate remove to superindex", () => {
+      const allEntities = createMultindex<{ id: number }>()(
+        (b) => ({
+          byId: b.uniqueMap({ key: (e) => e.id }),
+        }),
+      )
+
+      const users = createMultindex<User>()(
+        (b) => ({
+          byName: b.uniqueMap({ key: (u) => u.name }),
+        }),
+        { superindex: allEntities },
+      )
+
+      const alice = { id: 1, name: "Alice", department: "Engineering", age: 30 }
+      users.add(alice)
+      users.remove(alice)
+
+      // Should be removed from both indexes
+      assert.strictEqual(users.count, 0)
+      assert.strictEqual(users.has(alice), false)
+      assert.strictEqual(allEntities.count, 0)
+      assert.strictEqual(allEntities.has(alice), false)
+      assert.strictEqual(allEntities.byId.hasKey(1), false)
+    })
+
+    it("should support recursive superindex chains", () => {
+      // Grandparent
+      const allItems = createMultindex<{ id: number }>()((b) => ({
+        byId: b.uniqueMap({ key: (e) => e.id }),
+      }))
+
+      // Parent (superindex of allItems)
+      const allEntities = createMultindex<{ id: number; type: string }>()(
+        (b) => ({
+          byType: b.manyMap({
+            key: (e) => e.type,
+            subindex: (b) => b.set(),
+          }),
+        }),
+        { superindex: allItems },
+      )
+
+      // Child (superindex of allEntities)
+      interface TypedUser extends User {
+        type: string
+      }
+      const users = createMultindex<TypedUser>()(
+        (b) => ({
+          byName: b.uniqueMap({ key: (u) => u.name }),
+        }),
+        { superindex: allEntities },
+      )
+
+      const alice: TypedUser = {
+        id: 1,
+        name: "Alice",
+        department: "Engineering",
+        age: 30,
+        type: "user",
+      }
+      users.add(alice)
+
+      // Should propagate through the chain
+      assert.strictEqual(users.count, 1)
+      assert.strictEqual(allEntities.count, 1)
+      assert.strictEqual(allItems.count, 1)
+      assert.strictEqual(allItems.byId.get(1), alice)
+      assert.strictEqual(allEntities.byType.get("user").count, 1)
+
+      // Remove should propagate through the chain
+      users.remove(alice)
+      assert.strictEqual(users.count, 0)
+      assert.strictEqual(allEntities.count, 0)
+      assert.strictEqual(allItems.count, 0)
+    })
+
+    it("should work with inheritance hierarchy", () => {
+      // Base type
+      interface Vehicle {
+        id: number
+        manufacturer: string
+      }
+
+      // Derived types
+      interface Car extends Vehicle {
+        numDoors: number
+      }
+
+      interface Truck extends Vehicle {
+        payloadCapacity: number
+      }
+
+      // Superindex for all vehicles
+      const vehicles = createMultindex<Vehicle>()((b) => ({
+        byId: b.uniqueMap({ key: (v) => v.id }),
+        byManufacturer: b.manyMap({
+          key: (v) => v.manufacturer,
+          subindex: (b) => b.set(),
+        }),
+      }))
+
+      // Child indexes for specific vehicle types
+      const cars = createMultindex<Car>()(
+        (b) => ({
+          byDoors: b.manyMap({
+            key: (c) => c.numDoors,
+            subindex: (b) => b.set(),
+          }),
+        }),
+        { superindex: vehicles },
+      )
+
+      const trucks = createMultindex<Truck>()(
+        (b) => ({
+          byCapacity: b.uniqueSorted({ key: (t) => t.payloadCapacity }),
+        }),
+        { superindex: vehicles },
+      )
+
+      // Add vehicles
+      const sedan: Car = { id: 1, manufacturer: "Toyota", numDoors: 4 }
+      const coupe: Car = { id: 2, manufacturer: "Honda", numDoors: 2 }
+      const pickup: Truck = { id: 3, manufacturer: "Toyota", payloadCapacity: 2000 }
+
+      cars.add(sedan)
+      cars.add(coupe)
+      trucks.add(pickup)
+
+      // Check child indexes
+      assert.strictEqual(cars.count, 2)
+      assert.strictEqual(cars.byDoors.get(4).count, 1)
+      assert.strictEqual(trucks.count, 1)
+      assert.strictEqual(trucks.byCapacity.get(2000), pickup)
+
+      // Check superindex contains all vehicles
+      assert.strictEqual(vehicles.count, 3)
+      assert.strictEqual(vehicles.byId.get(1), sedan)
+      assert.strictEqual(vehicles.byId.get(2), coupe)
+      assert.strictEqual(vehicles.byId.get(3), pickup)
+      assert.strictEqual(vehicles.byManufacturer.get("Toyota").count, 2)
+      assert.strictEqual(vehicles.byManufacturer.get("Honda").count, 1)
+
+      // Remove from child should also remove from superindex
+      cars.remove(sedan)
+      assert.strictEqual(cars.count, 1)
+      assert.strictEqual(vehicles.count, 2)
+      assert.strictEqual(vehicles.byId.hasKey(1), false)
+      assert.strictEqual(vehicles.byManufacturer.get("Toyota").count, 1) // only pickup
+    })
+
+    it("should work with reactivity and superindex", () => {
+      const domain = Changes.create()
+
+      const allEntities = createMultindex<{ id: number; category: string }>()(
+        (b) => ({
+          byCategory: b.manyMap({
+            key: (e) => e.category,
+            subindex: (b) => b.set(),
+          }),
+        }),
+        { domain },
+      )
+
+      interface CategorizedUser extends User {
+        category: string
+      }
+
+      const users = createMultindex<CategorizedUser>()(
+        (b) => ({
+          byName: b.uniqueMap({ key: (u) => u.name }),
+        }),
+        { domain, superindex: allEntities },
+      )
+
+      const alice: CategorizedUser = {
+        id: 1,
+        name: "Alice",
+        department: "Engineering",
+        age: 30,
+        category: "admin",
+      }
+      const trackedAlice = users.add(alice)
+
+      // Both indexes should have the item
+      assert.strictEqual(users.count, 1)
+      assert.strictEqual(allEntities.count, 1)
+      assert.strictEqual(allEntities.byCategory.get("admin").count, 1)
+
+      // Change category - superindex should re-index
+      trackedAlice.category = "user"
+
+      assert.strictEqual(allEntities.byCategory.hasKey("admin"), false)
+      assert.strictEqual(allEntities.byCategory.get("user").count, 1)
+    })
+  })
+
   describe("reactivity", () => {
     it("should return a reactive proxy from add() when domain is provided", () => {
       const domain = Changes.create()

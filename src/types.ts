@@ -3,6 +3,7 @@
  */
 
 import type { ChangeDomain } from "chchchchanges"
+import type { Multindex } from "./interfaces.js"
 
 // =============================================================================
 // Sort Key Types
@@ -139,7 +140,7 @@ export type PartialSortKey<K> = K extends [
 /**
  * Configuration options for creating a Multindex
  */
-export interface MultindexConfig {
+export interface MultindexConfig<SuperI = unknown> {
   /**
    * The change domain from chchchchanges for reactivity
    */
@@ -152,6 +153,14 @@ export interface MultindexConfig {
    * be automatically re-indexed on change.
    */
   reactive?: boolean
+
+  /**
+   * If specified, items added to or removed from this Multindex will also be added to
+   * or removed from the superindex (recursively). The items in the superindex must be
+   * assignable from the items in this Multindex. This is typically used when items have
+   * an inheritance hierarchy, and the Multindex structure mirrors that hierarchy.
+   */
+  superindex?: Multindex<SuperI>
 }
 
 // =============================================================================
