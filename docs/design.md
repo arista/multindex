@@ -23,6 +23,9 @@ IndexBuilderFn<IXS> = (b: IndexBuilder) => IXS
 MultindexConfig {
   domain?: ChangeDomain // From chchchchanges
 
+  // If this is specified, then any items added or removed from this Multindex will also be added or removed from the superindex (which could continue recursively).  The items in the superindex must be assignable from the items in this Multindex.  This is typically used when items have an inheritance hierarchy, and the Multindex structure is set up to mirror that.
+  superindex?: MultindexConfig
+
   // When true (the default), items added to the Multindex are wrapped in chchchchanges
   // reactivity, and the index automatically re-indexes items when their keys or filter
   // values change. When false, no reactivity overhead is incurred, but items will not
