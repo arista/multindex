@@ -194,9 +194,9 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
  * ```
  */
 export function createMultindex<I>() {
-  return function <IXS extends Record<string, IndexBase<I>>>(
+  return function <IXS extends Record<string, IndexBase<I>>, SuperI = unknown>(
     builderFn: IndexBuilderFn<I, IXS>,
-    config?: MultindexConfig<unknown>,
+    config?: MultindexConfig<SuperI> & (I extends SuperI ? unknown : never),
   ): Multindex<I> & IXS {
     return MultindexImpl.create(builderFn, config)
   }
