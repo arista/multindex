@@ -187,11 +187,12 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
   }
 
   /**
-   * Add an item to a subtype Multindex identified by subtypeName.
+   * Return the Multindex for the given subtype.
+   * Returns this Multindex if subtypeName is null.
    */
-  addSubtype(item: I, subtypeName: string | null): I {
+  getSubtypeIndex<S = unknown>(subtypeName: string | null): Multindex<S> {
     if (subtypeName === null) {
-      return this.add(item)
+      return this as unknown as Multindex<S>
     }
 
     const dotIndex = subtypeName.indexOf(".")
@@ -203,34 +204,7 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
       throw new Error(`Unknown subtype: ${firstSegment}`)
     }
 
-    // Wrap in reactive proxy before passing to subtype (only at root level)
-    let trackedItem = item
-    if (!this.supertypeIndex && this.domain && typeof item === "object" && item !== null) {
-      trackedItem = this.domain.enableChanges(item)
-    }
-
-    return subtype.addSubtype(trackedItem, remainder) as I
-  }
-
-  /**
-   * Remove an item from a subtype Multindex identified by subtypeName.
-   */
-  removeSubtype(item: I, subtypeName: string | null): void {
-    if (subtypeName === null) {
-      this.remove(item)
-      return
-    }
-
-    const dotIndex = subtypeName.indexOf(".")
-    const firstSegment = dotIndex >= 0 ? subtypeName.slice(0, dotIndex) : subtypeName
-    const remainder = dotIndex >= 0 ? subtypeName.slice(dotIndex + 1) : null
-
-    const subtype = this.subtypeMap.get(firstSegment)
-    if (!subtype) {
-      throw new Error(`Unknown subtype: ${firstSegment}`)
-    }
-
-    subtype.removeSubtype(item, remainder)
+    return subtype.getSubtypeIndex<S>(remainder)
   }
 
   /**
@@ -266,24 +240,41 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
 
   /**
    * Remove an item from the Multindex and all contained indexes.
+   * If this is a subtype, relays the remove to the root Multindex,
+   * which then removes from everywhere in the hierarchy.
    */
   remove(item: I): void {
+    // If this is a subtype, relay to supertype (which will eventually reach root)
+    if (this.supertypeIndex) {
+      this.supertypeIndex.remove(item as unknown)
+      return
+    }
+
+    // This is the root - remove from everywhere
+    this.removeFromHierarchy(item)
+  }
+
+  /**
+   * Internal method to remove an item from this Multindex and all contained indexes,
+   * including subtype indexes. Called by the root Multindex.
+   */
+  private removeFromHierarchy(item: I): void {
     // Remove from main set
     this.itemSet.delete(item)
 
-    // Remove from all contained indexes (but skip subtype indexes - they handle their own removes)
+    // Remove from all contained indexes (including subtypes)
     for (const index of this.indexList) {
-      if (!isSubtypeMultindex(index)) {
+      if (isSubtypeMultindex(index)) {
+        // For subtypes, call their internal remove method
+        ;(index as unknown as MultindexImpl<I, Record<string, IndexBase<I>>>).removeFromHierarchy(
+          item,
+        )
+      } else {
         const removable = index as RemovableIndex<I>
         if (removable.remove) {
           removable.remove(item)
         }
       }
-    }
-
-    // Propagate up to supertype if this is a subtype
-    if (this.supertypeIndex) {
-      this.supertypeIndex.remove(item as unknown)
     }
   }
 
