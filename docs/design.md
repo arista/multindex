@@ -176,7 +176,7 @@ SetIndex<I> extends IndexBase<I> {
 MapIndex<I, V, K> extends SetIndex<I> {
   hasKey(key: K): boolean
   tryGet(key: K): V | null
-  // error if key not found
+  // For UniqueIndexes, error if the key is not found.  For ManyIndexes, if the key is not found, then an empty subindex is created and assigned to the key.
   get(key: K): V
   keys: IterableIterator<K>
 }
