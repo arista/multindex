@@ -14,7 +14,6 @@ import type {
   PartialSortKey,
 } from "./types.js"
 import { IndexImplBase, SubindexImpl, getFilterFn } from "./index-impl-base.js"
-import { KeyNotFoundError } from "./errors.js"
 import { parseSortKeySpec, ParsedSortKey, compareKeys } from "./sort-compare.js"
 import { SortedViewImpl, SortedDataSource } from "./sorted-view-impl.js"
 
@@ -343,12 +342,14 @@ export class ManySortedIndexImpl<I, K extends SingleSortKey, SUBIX extends Index
   }
 
   /**
-   * Get the subindex for a key. Throws if not found.
+   * Get the subindex for a key.
+   * If the key is not found, creates an empty subindex and assigns it to the key.
    */
   get(key: K): SUBIX {
-    const index = this.findEntryIndex(key as SortKey)
+    let index = this.findEntryIndex(key as SortKey)
     if (index < 0) {
-      throw new KeyNotFoundError(key)
+      this.getOrCreateSubindex(key)
+      index = this.findEntryIndex(key as SortKey)
     }
     return this.sortedEntries[index]!.subindex
   }

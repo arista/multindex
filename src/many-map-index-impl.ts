@@ -13,7 +13,6 @@ import {
   getKeySetFn,
   getFilterFn,
 } from "./index-impl-base.js"
-import { KeyNotFoundError } from "./errors.js"
 
 /**
  * ManyMapIndex implementation backed by a JavaScript Map of subindexes.
@@ -159,14 +158,14 @@ export class ManyMapIndexImpl<I, K, SUBIX extends IndexBase<I>>
   }
 
   /**
-   * Get the subindex for a key. Throws if not found.
+   * Get the subindex for a key.
+   * If the key is not found, creates an empty subindex and assigns it to the key.
    */
   get(key: K): SUBIX {
-    const subindex = this.map.get(key)
-    if (subindex === undefined) {
-      throw new KeyNotFoundError(key)
+    if (!this.map.has(key)) {
+      this.getOrCreateSubindex(key)
     }
-    return subindex
+    return this.map.get(key)!
   }
 
   /**
