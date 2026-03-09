@@ -35,6 +35,7 @@ import { UniqueBTreeIndexImpl } from "./unique-btree-index-impl.js"
 import { ManyMapIndexImpl } from "./many-map-index-impl.js"
 import { ManySortedIndexImpl } from "./many-sorted-index-impl.js"
 import { ManyBTreeIndexImpl } from "./many-btree-index-impl.js"
+import { createSubtypeMultindex } from "./multindex.js"
 
 /**
  * Implementation of IndexBuilder.
@@ -149,6 +150,37 @@ export class IndexBuilderImpl<I> implements IndexBuilder<I> {
 
     // Create a composite that is both a SetIndex and has the named indexes
     return new NestedMultindexImpl<I, IXS>(this.domain, indexes) as unknown as SetIndex<I> & IXS
+  }
+
+  /**
+   * Create a subtype multindex for type hierarchies.
+   * Items added to the subtype are automatically added to the supertype Multindex.
+   *
+   * Returns a curried function to allow TypeScript to infer IXS from the builder function.
+   *
+   * @example
+   * ```typescript
+   * const vehicles = createMultindex<Vehicle>()((b) => ({
+   *   byId: b.uniqueMap({ key: (v) => v.id }),
+   *   Car: b.subtype<Car>()((b) => ({
+   *     byDoors: b.manyMap({ key: (c) => c.numDoors, subindex: (b) => b.set() }),
+   *   })),
+   * }))
+   * ```
+   */
+  subtype<SUB extends I>(): <IXS extends Record<string, IndexBase<SUB>>>(
+    f: IndexBuilderFn<SUB, IXS>,
+  ) => SetIndex<SUB> & IXS {
+    return <IXS extends Record<string, IndexBase<SUB>>>(
+      f: IndexBuilderFn<SUB, IXS>,
+    ): SetIndex<SUB> & IXS => {
+      // Create a builder for the subtype
+      const subtypeBuilder = new IndexBuilderImpl<SUB>(this.domain)
+      const indexes = f(subtypeBuilder as IndexBuilder<SUB>)
+
+      // Create a subtype Multindex - the supertype will be connected later
+      return createSubtypeMultindex<SUB, IXS>(indexes, this.domain) as SetIndex<SUB> & IXS
+    }
   }
 
   // ===========================================================================

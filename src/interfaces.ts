@@ -151,4 +151,24 @@ export interface Multindex<I> extends SetIndex<I> {
    * Remove an item from the Multindex and all its contained indexes
    */
   remove(item: I): void
+
+  /**
+   * If this Multindex has a supertype Multindex, this is the full path from the root
+   * Multindex to this one (e.g., "Vehicle.Car"). Otherwise this is null.
+   */
+  readonly subtypeName: string | null
+
+  /**
+   * Add an item to a subtype Multindex identified by subtypeName.
+   * If subtypeName is null, adds to this Multindex.
+   * Throws if subtypeName doesn't match any subtype.
+   */
+  addSubtype(item: I, subtypeName: string | null): I
+
+  /**
+   * Remove an item from a subtype Multindex identified by subtypeName.
+   * If subtypeName is null, removes from this Multindex.
+   * Throws if subtypeName doesn't match any subtype.
+   */
+  removeSubtype(item: I, subtypeName: string | null): void
 }

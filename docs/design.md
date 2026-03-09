@@ -14,6 +14,13 @@ Multindex<I> extends SetIndex<I> {
 
   // Remove an item from the Multindex and all its contained indexes
   remove(item: I)
+
+  // If the Multindex has a supertype Multindex, this would be {supertype Multindex subtypeName}.{this Multindex's property name within the supertype Multindex}.  Otherwise this is null
+  subtypeName: string|null
+  
+  // If the Multindex has subtype Multindexes, this will locate the Multindex with the given subtypeName, then perform the add or remove operation on it.  If subtypeName is null, then the operation is performed on this Multindex
+  addSubtype(item: I, subtypeName: string|null)
+  removeSubtype(item: I, subtypeName: string|null)
 }
 
 // The IndexBuilderFn should return a mapping from name to index implementation (supplied by the IndexBuilder).  Those mappings will become properties of a Multindex
@@ -22,9 +29,6 @@ IndexBuilderFn<IXS> = (b: IndexBuilder) => IXS
 
 MultindexConfig {
   domain?: ChangeDomain // From chchchchanges
-
-  // If this is specified, then any items added or removed from this Multindex will also be added or removed from the superindex (which could continue recursively).  The items in the superindex must be assignable from the items in this Multindex.  This is typically used when items have an inheritance hierarchy, and the Multindex structure is set up to mirror that.
-  superindex?: Multindex<SuperI>
 
   // When true (the default), items added to the Multindex are wrapped in chchchchanges
   // reactivity, and the index automatically re-indexes items when their keys or filter
@@ -49,6 +53,9 @@ IndexBuilder<I> {
 
   // Returns a multindex implementation that acts like a Set, but also contains additional indexes defined by f.  The result is similar to a Multindex, except that it doesn't have a "remove" method
   mult(f: IndexBuilderFn<IXS>) => SetIndex & IXS
+
+  // Returns a multindex containing a subtype of I.  Any items added to or removed from the subtype's multindex will also be added to or removed from this multindex.
+  subtype<SUB extends I>(f: IndexBuilderFn<IXS>) => SetIndex<SUB> & IXS
 
   // helper functions
   key<K>(get: (item: I) => K, set?: (item: I, value: K) => void) => MapKeySpec<I, K>
@@ -509,3 +516,20 @@ An important aspect of the system is that it can participate in the chchchchange
 But this also goes in the other direction, where an application might use the indexes, and want to know about changes made to the indexes themselves. For example, an application might have a reactive function that retrieves the first item from a sorted index in a Multindex, and it might want to be notified if that value changes.
 
 In theory, this _might_ just work. The chchchchanges library already handles Sets, Maps, and Arrays, which would presumably be the underlying structures used in the index implementations. As long as those implementations don't use those structures in strange or unexpected ways, it might all work out nicely.
+
+### Subtype Indexes
+
+An object model might be built on a type hierarchy.  For example, "Car" and "Bus" might be a subtypes of "Vehicle", which might be a subtype of "Asset".  An application would typically expect the set of all Cars and the set of all Busses to be distinct, but would expect them both to be included in the set of all Vehicles, which would also be included in the set of all Assets.
+
+Multindex supports this by enabling a supertype/subtype relationship between Multindexes.  If an item is added to a subtype's Multindex, it will also be added to the Multindexes for all supertypes.  So adding an item to a "Car" Multindex would automatically add it to both the "Vehicle" and "Asset" Multindexes.  The same would be true for removing an item.
+
+This relationship is specified as part the create function for a Multindex, by calling subtype() to create a new Multindex.  The subtype Multindex will automatically be connected to the enclosing Multindex to enable the above behavior.
+
+Note that this means a Multindex can have some properties that are "additional indexes" and some that are "subtype indexes".  These two groups behave differently:
+
+* additional indexes - items added to/removed from the Multindex are automatically added to/removed from all the additional indexes.
+* subtype indexes - effectively acts in reverse.  Items added to a subtype index are automatically added to the supertype (parent) Multindex.
+
+This also means that accessing subtype indexes follows the type hierarchy.  For example, accessing the indexes for Cars might be found at `indexes.Asset.Vehicle.Car.byId`.
+
+Multindexes also support the notion of a "type discriminator" string, which are commonly used when serializing to/deserializing from JSON values.  In Multindex this is called a `subtypeName`.  The subtypeName is the full path from the "root" Multindex (the Mulindex with no supertype index) "down" to the subtype Multindex.  For example, "Asset.Vehicle.Car".  This is exposed on Multindex through the subtypeName property, and the addSubtype/removeSubtype calls.
