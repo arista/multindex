@@ -4,7 +4,7 @@ This document tracks the roadmap and planned features for brint
 
 ## Current Focus
 
-I made a change to the [design document](./docs/design.md) around the subtypes API, and around removeal behavior.  Let me know what you think, then prepare to implement on nsa-subtype-removes
+I have added [schema-design](./docs/schema-design.md).  It's pretty rough, but I'm curious as to your thoughts.  Please respond in docs/schema-design-analysis.md.
 
 ## Docs and References
 
