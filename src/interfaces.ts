@@ -148,7 +148,9 @@ export type ManySortedIndex<I, V extends IndexBase<I>, K, PK = PartialSortKey<K>
  */
 export interface Multindex<I> extends SetIndex<I> {
   /**
-   * Remove an item from the Multindex and all its contained indexes
+   * Remove an item from the Multindex and all its contained indexes.
+   * If this is a subtype Multindex, the remove is relayed to the root Multindex,
+   * which then removes from everywhere in the hierarchy.
    */
   remove(item: I): void
 
@@ -159,16 +161,9 @@ export interface Multindex<I> extends SetIndex<I> {
   readonly subtypeName: string | null
 
   /**
-   * Add an item to a subtype Multindex identified by subtypeName.
-   * If subtypeName is null, adds to this Multindex.
+   * Return the Multindex for the given subtype.
+   * Returns this Multindex if subtypeName is null.
    * Throws if subtypeName doesn't match any subtype.
    */
-  addSubtype(item: I, subtypeName: string | null): I
-
-  /**
-   * Remove an item from a subtype Multindex identified by subtypeName.
-   * If subtypeName is null, removes from this Multindex.
-   * Throws if subtypeName doesn't match any subtype.
-   */
-  removeSubtype(item: I, subtypeName: string | null): void
+  getSubtypeIndex<S = unknown>(subtypeName: string | null): Multindex<S>
 }
