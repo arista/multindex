@@ -4,7 +4,11 @@ This document tracks the roadmap and planned features for brint
 
 ## Current Focus
 
-I added a notion of superindexes to the design.md document.  Please give your thoughts, and prepare to implement.
+The previous commit on main added a notion of superindexes.  I'm rethinking how that's done, probably to the point of undoing that commit.
+
+Look at what I've added to the [design document](./docs/design.md), and let me know what you think.  Don't change anything yet.
+
+If we do implement, I'd want it on branch nsa-type-hierarchy.  If we begin by undoing the commit on main, please put the undoing on its own commit, then the new approach on a separate commit.  That would make it easier for me to review.
 
 ## Docs and References
 

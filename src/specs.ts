@@ -296,6 +296,13 @@ export interface IndexBuilder<I> {
   // Nested multindex (for subindexes)
   mult<IXS extends Record<string, IndexBase<I>>>(f: IndexBuilderFn<I, IXS>): SetIndex<I> & IXS
 
+  // Subtype multindex (for type hierarchies)
+  // Items added to the subtype are automatically added to the supertype Multindex
+  // Returns a curried function to allow TypeScript to infer IXS from the builder
+  subtype<SUB extends I>(): <IXS extends Record<string, IndexBase<SUB>>>(
+    f: IndexBuilderFn<SUB, IXS>,
+  ) => SetIndex<SUB> & IXS
+
   // Helper functions for creating key specs
   key<K>(get: (item: I) => K, set?: (item: I, value: K) => void): FullMapKeySpec<I, K>
 
