@@ -2,7 +2,6 @@ import { describe, it } from "node:test"
 import assert from "node:assert"
 import { ManySortedIndexImpl } from "../src/many-sorted-index-impl.js"
 import { SetIndexImpl } from "../src/set-index-impl.js"
-import { KeyNotFoundError } from "../src/errors.js"
 
 interface User {
   id: number
@@ -77,17 +76,19 @@ describe("ManySortedIndexImpl", () => {
       assert.strictEqual(engineering.has(alice), true)
     })
 
-    it("should throw KeyNotFoundError when getting non-existent key", () => {
+    it("should create empty subindex when getting non-existent key", () => {
       const index = new ManySortedIndexImpl<User, string, SetIndexImpl<User>>(
         null,
         { key: (u) => u.department },
         () => new SetIndexImpl<User>(null),
       )
 
-      assert.throws(
-        () => index.get("NonExistent"),
-        (err: Error) => err instanceof KeyNotFoundError,
-      )
+      // Getting a non-existent key should create an empty subindex
+      const subindex = index.get("NonExistent")
+      assert.strictEqual(subindex.count, 0)
+
+      // The key should now exist
+      assert.ok(index.hasKey("NonExistent"))
     })
 
     it("should remove items", () => {

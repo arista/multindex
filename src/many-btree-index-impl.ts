@@ -18,7 +18,6 @@ import type {
   PartialSortKey,
 } from "./types.js"
 import { IndexImplBase, SubindexImpl, getFilterFn } from "./index-impl-base.js"
-import { KeyNotFoundError } from "./errors.js"
 import { parseSortKeySpec, ParsedSortKey, compareKeys } from "./sort-compare.js"
 import { SortedViewImpl, SortedDataSource } from "./sorted-view-impl.js"
 
@@ -252,14 +251,14 @@ export class ManyBTreeIndexImpl<I, K extends SingleSortKey, SUBIX extends IndexB
   }
 
   /**
-   * Get the subindex for a key. Throws if not found.
+   * Get the subindex for a key.
+   * If the key is not found, creates an empty subindex and assigns it to the key.
    */
   get(key: K): SUBIX {
-    const subindex = this.btree.get(key as SortKey)
-    if (subindex === undefined) {
-      throw new KeyNotFoundError(key)
+    if (!this.btree.has(key as SortKey)) {
+      this.getOrCreateSubindex(key)
     }
-    return subindex
+    return this.btree.get(key as SortKey)!
   }
 
   /**
