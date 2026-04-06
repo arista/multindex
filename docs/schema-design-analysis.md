@@ -11,6 +11,7 @@ The document clearly identifies a real need: Domain Object Models need relations
 ### 1. What does Schema add beyond a plain object?
 
 The document shows:
+
 ```
 Schema.create<SCH>(f: (b: SchemaBuilder): SCH, config?: SchemaConfig)
 ```
@@ -26,6 +27,7 @@ const schema = {
 ```
 
 For Schema to be worthwhile, it needs to provide something more:
+
 - Automatic entity factory registration for restore?
 - Coordinated clear/dispose across all indexes?
 - Schema-level serialization (dump/restore all indexes)?
@@ -36,24 +38,30 @@ For Schema to be worthwhile, it needs to provide something more:
 The document mentions `this.schema` but doesn't detail how this is set. Options:
 
 **A. Constructor injection:**
+
 ```typescript
 class Account {
   constructor(private schema: Schema) {}
 }
 ```
+
 Con: Every entity construction needs the schema passed in.
 
 **B. Property assignment after add:**
+
 ```typescript
 const account = new Account()
 schema.Account.add(account) // internally sets account.schema = schema
 ```
+
 Con: Entity is incomplete between construction and add.
 
 **C. Global/context-based:**
+
 ```typescript
 const account = schema.Account.create(props) // schema is implicit
 ```
+
 This might be cleanest - the Multindex creates the entity and injects the schema reference.
 
 ### 3. The `deletingEntity` property seems awkward
@@ -67,12 +75,14 @@ CascadeDeleting<E = unknown> {
 Why not track entities directly in a Set<CascadeDeleting>? The indirection through `deletingEntity` suggests handling cases where a wrapper implements CascadeDeleting on behalf of an entity. Is this common enough to warrant the complexity?
 
 If wrappers are rare, simplify to:
+
 ```typescript
 interface CascadeDeleting {
   cascadeDelete(op: DeleteOperation): void
   deleteSelf(): void
 }
 ```
+
 And track with `Set<CascadeDeleting>`.
 
 ### 4. Where should "owning relationships" be declared?
@@ -80,23 +90,29 @@ And track with `Set<CascadeDeleting>`.
 The document suggests entities would declare these, but doesn't specify how. Options:
 
 **A. Method override (current approach):**
+
 ```typescript
 cascadeDelete(op) {
   op.addAll(this.entries)
   op.add(this.summary)
 }
 ```
+
 Con: Must be kept in sync with actual relationships manually.
 
 **B. Declarative metadata:**
+
 ```typescript
 @owning entries: Entry[]
 @owning summary: Summary
 ```
+
 Or without decorators:
+
 ```typescript
 static owningRelationships = ['entries', 'summary'] as const
 ```
+
 Pro: Single source of truth for cascade delete, import, and export.
 
 **C. Convention-based:**
@@ -161,13 +177,13 @@ abstract class GraphOperation<TNode, TResult> {
 
 Based on the analysis, Multindex could help with:
 
-| Feature | Multindex | Application |
-|---------|-----------|-------------|
-| Schema container | Provide Schema.create | Define structure |
-| Entity factory registration | Provide registration API | Provide factory functions |
-| Cascade delete | Provide DeleteOperation | Declare owning relationships |
-| JSON dump/restore | Provide on Schema/Multindex | Minimal - just factories |
-| JSON import (hierarchical) | Provide ImportOperation | Declare owning relationships |
-| JSON export (hierarchical) | Provide ExportOperation | Declare owning relationships |
+| Feature                     | Multindex                   | Application                  |
+| --------------------------- | --------------------------- | ---------------------------- |
+| Schema container            | Provide Schema.create       | Define structure             |
+| Entity factory registration | Provide registration API    | Provide factory functions    |
+| Cascade delete              | Provide DeleteOperation     | Declare owning relationships |
+| JSON dump/restore           | Provide on Schema/Multindex | Minimal - just factories     |
+| JSON import (hierarchical)  | Provide ImportOperation     | Declare owning relationships |
+| JSON export (hierarchical)  | Provide ExportOperation     | Declare owning relationships |
 
 The key is that **owning relationships** are the shared concept. If entities can declare these once (via metadata), Multindex can provide the operations that traverse them.

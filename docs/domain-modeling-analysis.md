@@ -6,28 +6,30 @@ Summary of discussion on domain modeling patterns with Multindex.
 
 Settled on these JSON format names:
 
-| Name | Purpose | Relationships | Strictness |
-|------|---------|---------------|------------|
-| **Props** | Own properties, passed to constructor, used for dump/restore | No | Strict (all fields) |
-| **Input** | Graph format for creation | Yes (nested) | Forgiving (optional fields, defaults) |
-| **JSON** | Graph format for export | Yes (nested) | Strict |
+| Name      | Purpose                                                      | Relationships | Strictness                            |
+| --------- | ------------------------------------------------------------ | ------------- | ------------------------------------- |
+| **Props** | Own properties, passed to constructor, used for dump/restore | No            | Strict (all fields)                   |
+| **Input** | Graph format for creation                                    | Yes (nested)  | Forgiving (optional fields, defaults) |
+| **JSON**  | Graph format for export                                      | Yes (nested)  | Strict                                |
 
 - `UserProps` - flat, own properties
 - `UserInput` - for creating entities with relationships
 - `UserJSON` - for exporting entities with relationships
 
 Utility type for making specific fields optional in Input:
+
 ```typescript
 type MakeOptional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
 
-type UserInput = MakeOptional<UserProps, 'id' | 'createdAt'> & {
-  posts?: PostInput[]  // relationships
+type UserInput = MakeOptional<UserProps, "id" | "createdAt"> & {
+  posts?: PostInput[] // relationships
 }
 ```
 
 ## Entity Construction Pattern
 
 **Constructor takes Props (complete, flat):**
+
 ```typescript
 constructor(props: UserProps, ctx: Ctx) {
   super(ctx)
@@ -38,6 +40,7 @@ constructor(props: UserProps, ctx: Ctx) {
 ```
 
 **fromInput factory normalizes Input to Props:**
+
 ```typescript
 static fromInput(input: UserInput, ctx: Ctx): User {
   const props = User.inputToProps(input, ctx)
@@ -57,6 +60,7 @@ static inputToProps(input: UserInput, ctx: Ctx): UserProps {
 ```
 
 **Subtype dispatch:** Simple switch statement in fromInput is most straightforward:
+
 ```typescript
 static fromInput(input: VehicleInput, ctx: Ctx): Vehicle {
   switch (input._type) {
@@ -70,6 +74,7 @@ static fromInput(input: VehicleInput, ctx: Ctx): Vehicle {
 ## Schema
 
 Schema is just an object holding Multindexes - no formal construct needed:
+
 ```typescript
 const ctx = {
   schema: {
@@ -85,11 +90,13 @@ Entities hold reference to ctx for relationship lookups and utilities.
 ## Owned Relationships
 
 Used for three operations:
+
 1. **Cascade delete** - delete entity and all owned children
 2. **Import (fromInput)** - create entity and owned children from Input
 3. **Export (toJSON)** - serialize entity and owned children
 
 Currently implemented manually in each operation:
+
 ```typescript
 // Cascade delete
 cascadeDelete(op: DeleteOperation) {
@@ -145,9 +152,9 @@ const AddressDef = defineEntity({
     city: t.string,
     zip: t.string.nullable,
   },
-  optionalInInput: ['id', 'zip'],
+  optionalInInput: ["id", "zip"],
   defaults: { zip: null },
-  generateId: 'id',
+  generateId: "id",
 })
 
 // Derive types
@@ -162,6 +169,7 @@ class Address extends entity(AddressDef) {
 ```
 
 **Needs exploration:**
+
 - How to handle relationships in descriptor
 - How to handle inheritance/subtypes
 - How much can be derived vs. needs explicit declaration

@@ -518,17 +518,17 @@ In theory, this _might_ just work. The chchchchanges library already handles Set
 
 ### Subtype Indexes
 
-An object model might be built on a type hierarchy.  For example, "Car" and "Bus" might be a subtypes of "Vehicle", which might be a subtype of "Asset".  An application would typically expect the set of all Cars and the set of all Busses to be distinct, but would expect them both to be included in the set of all Vehicles, which would also be included in the set of all Assets.
+An object model might be built on a type hierarchy. For example, "Car" and "Bus" might be a subtypes of "Vehicle", which might be a subtype of "Asset". An application would typically expect the set of all Cars and the set of all Busses to be distinct, but would expect them both to be included in the set of all Vehicles, which would also be included in the set of all Assets.
 
-Multindex supports this by enabling a supertype/subtype relationship between Multindexes.  If an item is added to a subtype's Multindex, it will also be added to the Multindexes for all supertypes.  So adding an item to a "Car" Multindex would automatically add it to both the "Vehicle" and "Asset" Multindexes.  The same would be true for removing an item.
+Multindex supports this by enabling a supertype/subtype relationship between Multindexes. If an item is added to a subtype's Multindex, it will also be added to the Multindexes for all supertypes. So adding an item to a "Car" Multindex would automatically add it to both the "Vehicle" and "Asset" Multindexes. The same would be true for removing an item.
 
-This relationship is specified as part the create function for a Multindex, by calling subtype() to create a new Multindex.  The subtype Multindex will automatically be connected to the enclosing Multindex to enable the above behavior.
+This relationship is specified as part the create function for a Multindex, by calling subtype() to create a new Multindex. The subtype Multindex will automatically be connected to the enclosing Multindex to enable the above behavior.
 
-Note that this means a Multindex can have some properties that are "additional indexes" and some that are "subtype indexes".  These two groups behave differently:
+Note that this means a Multindex can have some properties that are "additional indexes" and some that are "subtype indexes". These two groups behave differently:
 
-* additional indexes - items added to/removed from the Multindex are automatically added to/removed from all the additional indexes.
-* subtype indexes - effectively acts in reverse.  Items added to a subtype index are automatically added to the supertype (parent) Multindex. **However**, an item removed from the Multindex is automatically removed from all the additional indexes **and** the subtype indexes.  Furthermore, calling remove on a subtype index relays that call all the way to the root.  In other words, removing an item from anywhere in the Multindex hierarchy, either in additional indexes or subtype indexes, causes that item to be removed from all indexes in the hierarchy.
+- additional indexes - items added to/removed from the Multindex are automatically added to/removed from all the additional indexes.
+- subtype indexes - effectively acts in reverse. Items added to a subtype index are automatically added to the supertype (parent) Multindex. **However**, an item removed from the Multindex is automatically removed from all the additional indexes **and** the subtype indexes. Furthermore, calling remove on a subtype index relays that call all the way to the root. In other words, removing an item from anywhere in the Multindex hierarchy, either in additional indexes or subtype indexes, causes that item to be removed from all indexes in the hierarchy.
 
-This also means that accessing subtype indexes follows the type hierarchy.  For example, accessing the indexes for Cars might be found at `indexes.Asset.Vehicle.Car.byId`.
+This also means that accessing subtype indexes follows the type hierarchy. For example, accessing the indexes for Cars might be found at `indexes.Asset.Vehicle.Car.byId`.
 
-Multindexes also support the notion of a "type discriminator" string, which are commonly used when serializing to/deserializing from JSON values.  In Multindex this is called a `subtypeName`.  The subtypeName is the full path from the "root" Multindex (the Mulindex with no supertype index) "down" to the subtype Multindex.  For example, "Asset.Vehicle.Car".  This is exposed on Multindex through the subtypeName property, and the getSubtypeIndex calls.
+Multindexes also support the notion of a "type discriminator" string, which are commonly used when serializing to/deserializing from JSON values. In Multindex this is called a `subtypeName`. The subtypeName is the full path from the "root" Multindex (the Mulindex with no supertype index) "down" to the subtype Multindex. For example, "Asset.Vehicle.Car". This is exposed on Multindex through the subtypeName property, and the getSubtypeIndex calls.

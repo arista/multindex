@@ -4,7 +4,7 @@ This document tracks the roadmap and planned features for brint
 
 ## Current Focus
 
-I have added [schema-design](./docs/schema-design.md).  It's pretty rough, but I'm curious as to your thoughts.  Please respond in docs/schema-design-analysis.md.
+I have added [schema-design](./docs/schema-design.md). It's pretty rough, but I'm curious as to your thoughts. Please respond in docs/schema-design-analysis.md.
 
 ## Docs and References
 

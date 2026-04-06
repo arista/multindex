@@ -68,11 +68,7 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
   // Marker for SubtypeMultindex type narrowing (only true when created as subtype)
   readonly isSubtypeMultindex: boolean
 
-  private constructor(
-    indexes: IXS,
-    domain: ChangeDomain | null,
-    isSubtype: boolean,
-  ) {
+  private constructor(indexes: IXS, domain: ChangeDomain | null, isSubtype: boolean) {
     this.indexes = indexes
     this.indexList = Object.values(indexes)
     this.domain = domain
