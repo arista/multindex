@@ -155,6 +155,10 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
     return this.itemSet.size
   }
 
+  get isEmpty(): boolean {
+    return this.count === 0
+  }
+
   /**
    * Iterator over all items
    */

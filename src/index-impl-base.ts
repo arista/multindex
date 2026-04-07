@@ -149,6 +149,10 @@ export abstract class IndexImplBase<I, K> {
     return this._count
   }
 
+  get isEmpty(): boolean {
+    return this.count === 0
+  }
+
   // ===========================================================================
   // AddedItem management
   // ===========================================================================
