@@ -18,6 +18,8 @@ export interface IndexBase<I> extends Iterable<I> {
    */
   readonly count: number
 
+  readonly isEmpty: boolean
+
   /**
    * Iterator over all included items
    */

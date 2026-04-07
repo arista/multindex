@@ -143,7 +143,7 @@ export interface MultindexConfig {
   /**
    * The change domain from chchchchanges for reactivity
    */
-  domain?: ChangeDomain
+  domain?: ChangeDomain|null
 
   /**
    * When true (the default), items added to the Multindex are wrapped in chchchchanges
