@@ -272,6 +272,7 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
    * Check if a key exists in the index
    */
   hasKey(key: K): boolean {
+    this.trackKeyAccess(key)
     return this.findIndexByKey(key as SortKey) >= 0
   }
 
@@ -279,6 +280,7 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
    * Get the item for a key, or null if not found
    */
   tryGet(key: K): I | null {
+    this.trackKeyAccess(key)
     const index = this.findIndexByKey(key as SortKey)
     if (index < 0) return null
     return this.sortedItems[index] ?? null
@@ -288,6 +290,7 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
    * Get the item for a key. Throws if not found.
    */
   get(key: K): I {
+    this.trackKeyAccess(key)
     const index = this.findIndexByKey(key as SortKey)
     if (index < 0) {
       throw new KeyNotFoundError(key)

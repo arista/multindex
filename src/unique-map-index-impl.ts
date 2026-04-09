@@ -100,6 +100,7 @@ export class UniqueMapIndexImpl<I, K> extends IndexImplBase<I, K> implements Uni
    * Check if a key exists in the index
    */
   hasKey(key: K): boolean {
+    this.trackKeyAccess(key)
     return this.map.has(key)
   }
 
@@ -107,6 +108,7 @@ export class UniqueMapIndexImpl<I, K> extends IndexImplBase<I, K> implements Uni
    * Get the item for a key, or null if not found
    */
   tryGet(key: K): I | null {
+    this.trackKeyAccess(key)
     return this.map.get(key) ?? null
   }
 
@@ -114,6 +116,7 @@ export class UniqueMapIndexImpl<I, K> extends IndexImplBase<I, K> implements Uni
    * Get the item for a key. Throws if not found.
    */
   get(key: K): I {
+    this.trackKeyAccess(key)
     const item = this.map.get(key)
     if (item === undefined) {
       throw new KeyNotFoundError(key)

@@ -8,6 +8,7 @@
  */
 
 import type { ChangeDomain } from "chchchchanges"
+import { ChangeSource } from "chchchchanges"
 import { AddedItem } from "./added-item.js"
 import type { AddResult, RemoveResult } from "./types.js"
 import type { FilterSpec, MapKeySpec } from "./specs.js"
@@ -98,6 +99,14 @@ export abstract class IndexImplBase<I, K> {
    */
   protected readonly subindexFn: ((key: K) => SubindexImpl<I>) | null
 
+  /**
+   * Per-key change sources for tracking index lookups.
+   * When a consumer calls get/tryGet/hasKey during a detectChanges context,
+   * a subscription is recorded here. When items are added/removed at that key,
+   * the source fires to trigger re-evaluation.
+   */
+  private keySources: Map<unknown, ChangeSource> | null = null
+
   constructor(config: IndexImplConfig<I, K>) {
     this.domain = config.domain
     this.keyFn = config.keyFn
@@ -151,6 +160,48 @@ export abstract class IndexImplBase<I, K> {
 
   get isEmpty(): boolean {
     return this.count === 0
+  }
+
+  // ===========================================================================
+  // Index change tracking
+  // ===========================================================================
+
+  /**
+   * Track a key access during a detectChanges context.
+   * If called outside detectChanges, this is a no-op.
+   * When the value at this key later changes (item added/removed/re-keyed),
+   * the subscribed listener will be notified.
+   */
+  protected trackKeyAccess(key: K): void {
+    const ctx = this.domain?.changeContext
+    if (!ctx) return
+
+    if (!this.keySources) this.keySources = new Map()
+
+    let source = this.keySources.get(key)
+    if (!source) {
+      source = new ChangeSource(`index.key(${String(key)})`, () => {
+        this.keySources?.delete(key)
+        if (this.keySources?.size === 0) this.keySources = null
+      })
+      this.keySources.set(key, source)
+    }
+
+    source.subscribe(ctx.listener)
+  }
+
+  /**
+   * Notify that the value at a key has changed (item added, removed, or re-keyed).
+   * Only fires if there are active listeners for this key.
+   */
+  protected notifyKeyMutation(key: K | null): void {
+    if (!this.domain || key === null) return
+    const source = this.keySources?.get(key)
+    if (!source) return
+
+    this.domain.withTransaction((t) => {
+      t.notify(source)
+    })
   }
 
   // ===========================================================================
@@ -394,6 +445,7 @@ export abstract class IndexImplBase<I, K> {
       return { countChange: 0 }
     }
 
+    let result: AddResult
     if (this.isUnique()) {
       // Unique index - check for uniqueness violation
       if (key !== null && this.getValueWithKey(key) !== null) {
@@ -401,14 +453,19 @@ export abstract class IndexImplBase<I, K> {
       }
       this.addValueWithKey(item, key as K)
       this._count += 1
-      return { countChange: 1 }
+      result = { countChange: 1 }
     } else {
       // Many index - delegate to subindex
       const subindex = this.getOrCreateSubindex(key as K)
-      const result = subindex.add(item)
-      this._count += result.countChange
-      return result
+      const addResult = subindex.add(item)
+      this._count += addResult.countChange
+      result = addResult
     }
+
+    // Notify listeners that this key's value changed
+    this.notifyKeyMutation(key)
+
+    return result
   }
 
   /**
@@ -434,21 +491,27 @@ export abstract class IndexImplBase<I, K> {
       return { countChange: 0 }
     }
 
+    let result: RemoveResult
     if (this.isUnique()) {
       this.removeValueWithKey(key as K)
       this._count -= 1
-      return { countChange: -1 }
+      result = { countChange: -1 }
     } else {
       // Many index - delegate to subindex
       const subindex = this.getValueWithKey(key as K) as SubindexImpl<I> | null
       if (!subindex) {
         return { countChange: 0 }
       }
-      const result = subindex.remove(item)
+      const subResult = subindex.remove(item)
       this.checkForEmptySubindexAtKey(subindex, key as K)
-      this._count += result.countChange
-      return result
+      this._count += subResult.countChange
+      result = subResult
     }
+
+    // Notify listeners that this key's value changed
+    this.notifyKeyMutation(key)
+
+    return result
   }
 
   // ===========================================================================
@@ -510,6 +573,7 @@ export abstract class IndexImplBase<I, K> {
     }
     this.clearValues()
     this._count = 0
+    this.keySources = null
   }
 }
 

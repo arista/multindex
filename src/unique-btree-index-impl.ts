@@ -184,6 +184,7 @@ export class UniqueBTreeIndexImpl<I, K extends SingleSortKey>
    * Check if a key exists in the index
    */
   hasKey(key: K): boolean {
+    this.trackKeyAccess(key)
     return this.btree.has(key as SortKey)
   }
 
@@ -191,6 +192,7 @@ export class UniqueBTreeIndexImpl<I, K extends SingleSortKey>
    * Get the item for a key, or null if not found
    */
   tryGet(key: K): I | null {
+    this.trackKeyAccess(key)
     return this.btree.get(key as SortKey) ?? null
   }
 
@@ -198,6 +200,7 @@ export class UniqueBTreeIndexImpl<I, K extends SingleSortKey>
    * Get the item for a key. Throws if not found.
    */
   get(key: K): I {
+    this.trackKeyAccess(key)
     const item = this.btree.get(key as SortKey)
     if (item === undefined) {
       throw new KeyNotFoundError(key)

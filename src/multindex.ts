@@ -224,19 +224,28 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
       trackedItem = this.domain.enableChanges(item)
     }
 
-    // Add to main set
-    this.itemSet.add(trackedItem)
+    const doAdd = () => {
+      // Add to main set
+      this.itemSet.add(trackedItem)
 
-    // Add to all contained indexes (but skip subtype indexes - they get items via their own add)
-    for (const index of this.indexList) {
-      if (!isSubtypeMultindex(index)) {
-        index.add(trackedItem)
+      // Add to all contained indexes (but skip subtype indexes - they get items via their own add)
+      for (const index of this.indexList) {
+        if (!isSubtypeMultindex(index)) {
+          index.add(trackedItem)
+        }
+      }
+
+      // Propagate up to supertype if this is a subtype
+      if (this.supertypeIndex) {
+        this.supertypeIndex.add(trackedItem as unknown)
       }
     }
 
-    // Propagate up to supertype if this is a subtype
-    if (this.supertypeIndex) {
-      this.supertypeIndex.add(trackedItem as unknown)
+    // Wrap in transaction to batch change notifications
+    if (this.domain) {
+      this.domain.withTransaction(() => doAdd())
+    } else {
+      doAdd()
     }
 
     return trackedItem
@@ -255,7 +264,12 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
     }
 
     // This is the root - remove from everywhere
-    this.removeFromHierarchy(item)
+    // Wrap in transaction to batch change notifications
+    if (this.domain) {
+      this.domain.withTransaction(() => this.removeFromHierarchy(item))
+    } else {
+      this.removeFromHierarchy(item)
+    }
   }
 
   /**

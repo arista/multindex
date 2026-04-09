@@ -329,6 +329,7 @@ export class ManySortedIndexImpl<I, K extends SingleSortKey, SUBIX extends Index
    * Check if a key exists in the index
    */
   hasKey(key: K): boolean {
+    this.trackKeyAccess(key)
     return this.findEntryIndex(key as SortKey) >= 0
   }
 
@@ -336,6 +337,7 @@ export class ManySortedIndexImpl<I, K extends SingleSortKey, SUBIX extends Index
    * Get the subindex for a key, or null if not found
    */
   tryGet(key: K): SUBIX | null {
+    this.trackKeyAccess(key)
     const index = this.findEntryIndex(key as SortKey)
     if (index < 0) return null
     return this.sortedEntries[index]!.subindex
@@ -346,6 +348,7 @@ export class ManySortedIndexImpl<I, K extends SingleSortKey, SUBIX extends Index
    * If the key is not found, creates an empty subindex and assigns it to the key.
    */
   get(key: K): SUBIX {
+    this.trackKeyAccess(key)
     let index = this.findEntryIndex(key as SortKey)
     if (index < 0) {
       this.getOrCreateSubindex(key)

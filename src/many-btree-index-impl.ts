@@ -240,6 +240,7 @@ export class ManyBTreeIndexImpl<I, K extends SingleSortKey, SUBIX extends IndexB
    * Check if a key exists in the index
    */
   hasKey(key: K): boolean {
+    this.trackKeyAccess(key)
     return this.btree.has(key as SortKey)
   }
 
@@ -247,6 +248,7 @@ export class ManyBTreeIndexImpl<I, K extends SingleSortKey, SUBIX extends IndexB
    * Get the subindex for a key, or null if not found
    */
   tryGet(key: K): SUBIX | null {
+    this.trackKeyAccess(key)
     return this.btree.get(key as SortKey) ?? null
   }
 
@@ -255,6 +257,7 @@ export class ManyBTreeIndexImpl<I, K extends SingleSortKey, SUBIX extends IndexB
    * If the key is not found, creates an empty subindex and assigns it to the key.
    */
   get(key: K): SUBIX {
+    this.trackKeyAccess(key)
     if (!this.btree.has(key as SortKey)) {
       this.getOrCreateSubindex(key)
     }

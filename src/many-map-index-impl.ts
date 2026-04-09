@@ -147,6 +147,7 @@ export class ManyMapIndexImpl<I, K, SUBIX extends IndexBase<I>>
    * Check if a key exists in the index (has at least one item)
    */
   hasKey(key: K): boolean {
+    this.trackKeyAccess(key)
     return this.map.has(key)
   }
 
@@ -154,6 +155,7 @@ export class ManyMapIndexImpl<I, K, SUBIX extends IndexBase<I>>
    * Get the subindex for a key, or null if not found
    */
   tryGet(key: K): SUBIX | null {
+    this.trackKeyAccess(key)
     return this.map.get(key) ?? null
   }
 
@@ -162,6 +164,7 @@ export class ManyMapIndexImpl<I, K, SUBIX extends IndexBase<I>>
    * If the key is not found, creates an empty subindex and assigns it to the key.
    */
   get(key: K): SUBIX {
+    this.trackKeyAccess(key)
     if (!this.map.has(key)) {
       this.getOrCreateSubindex(key)
     }
