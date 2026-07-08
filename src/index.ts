@@ -35,6 +35,7 @@ export type {
   ManyMapIndex,
   UniqueSortedIndex,
   ManySortedIndex,
+  MappableOrdered,
   Multindex,
 } from "./interfaces.js"
 

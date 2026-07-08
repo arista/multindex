@@ -10,6 +10,7 @@ import type {
   UniqueSortedIndex,
   ManyMapIndex,
   ManySortedIndex,
+  MappableOrdered,
 } from "./interfaces.js"
 
 // =============================================================================
@@ -277,7 +278,9 @@ export interface IndexBuilder<I> {
   uniqueMap<K>(spec: UniqueMapSpec<I, K>): UniqueMapIndex<I, K>
 
   // Unique sorted indexes
-  uniqueSorted<K extends SingleSortKey>(spec: UniqueSortedSpec<I, K>): UniqueSortedIndex<I, K>
+  uniqueSorted<K extends SingleSortKey>(
+    spec: UniqueSortedSpec<I, K>,
+  ): UniqueSortedIndex<I, K> & MappableOrdered<I>
 
   uniqueBTree<K extends SingleSortKey>(spec: UniqueBTreeSpec<I, K>): UniqueSortedIndex<I, K>
 
