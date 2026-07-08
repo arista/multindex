@@ -251,6 +251,10 @@ class NestedMultindexImpl<I, IXS extends Record<string, IndexBase<I>>> implement
     return this.setIndex.count
   }
 
+  get isEmpty(): boolean {
+    return this.setIndex.isEmpty
+  }
+
   get items(): IterableIterator<I> {
     return this.setIndex.items
   }
