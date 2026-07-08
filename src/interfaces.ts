@@ -126,6 +126,27 @@ export type UniqueMapIndex<I, K> = MapIndex<I, I, K>
 export type ManyMapIndex<I, V extends IndexBase<I>, K> = MapIndex<I, V, K>
 
 /**
+ * Adds live derived-array operations to an ordered index. The ordering is the
+ * index's; consumers derive read-only reactive arrays from it.
+ */
+export interface MappableOrdered<I> {
+  /**
+   * A change-enabled array of this index's items in sort order. Read-only:
+   * subscribe to it, map it, or hand it to a renderer — but do not mutate it.
+   * The index is the sole author of its ordering. Requires a reactive domain.
+   */
+  readonly orderedArray: readonly I[]
+
+  /**
+   * Create a live array derived from this index's ordered items by applying
+   * `fn` to each. Structural changes to the index (add/remove/reorder) are
+   * threaded through as fine-grained updates to the result. Create it once and
+   * hold it — do not call this per render. Requires a reactive domain.
+   */
+  createMappedArray<U>(fn: (item: I) => U): U[]
+}
+
+/**
  * A unique sorted index where each key maps to exactly one item
  */
 export type UniqueSortedIndex<I, K, PK = PartialSortKey<K>> = SortedIndex<I, I, K, PK>

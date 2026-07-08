@@ -8,6 +8,7 @@ import type {
   SetIndex,
   UniqueMapIndex,
   UniqueSortedIndex,
+  MappableOrdered,
   ManyMapIndex,
   ManySortedIndex,
 } from "./interfaces.js"
@@ -85,7 +86,9 @@ export class IndexBuilderImpl<I> implements IndexBuilder<I> {
   /**
    * Create a unique sorted index backed by a sorted array.
    */
-  uniqueSorted<K extends SingleSortKey>(spec: UniqueSortedSpec<I, K>): UniqueSortedIndex<I, K> {
+  uniqueSorted<K extends SingleSortKey>(
+    spec: UniqueSortedSpec<I, K>,
+  ): UniqueSortedIndex<I, K> & MappableOrdered<I> {
     return new UniqueSortedIndexImpl<I, K>(this.domain, spec)
   }
 

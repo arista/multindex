@@ -3,7 +3,7 @@
  */
 
 import type { ChangeDomain } from "chchchchanges"
-import type { UniqueSortedIndex, SortedView } from "./interfaces.js"
+import type { UniqueSortedIndex, SortedView, MappableOrdered } from "./interfaces.js"
 import type { UniqueSortedSpec, SortDirection } from "./specs.js"
 import type {
   AddResult,
@@ -34,12 +34,21 @@ import { SortedViewImpl, SortedDataSource } from "./sorted-view-impl.js"
  */
 export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
   extends IndexImplBase<I, K>
-  implements UniqueSortedIndex<I, K, PartialSortKey<K>>, SortedDataSource<I>
+  implements UniqueSortedIndex<I, K, PartialSortKey<K>>, MappableOrdered<I>, SortedDataSource<I>
 {
   private readonly sortedItems: I[] = []
   private readonly parsedKey: ParsedSortKey<I>
   private readonly itemComparator: (a: I, b: I) => number
   private readonly view: SortedViewImpl<I, PartialSortKey<K>>
+
+  /**
+   * A change-enabled view over `sortedItems`, created lazily on first use.
+   * `sortedItems` stays a plain array (reads/binary search never touch a proxy);
+   * this proxy exists only as the subscription anchor for derived reactive
+   * arrays. Once it exists, structural mutations announce their deltas on its
+   * behalf via the change domain.
+   */
+  private orderedView: I[] | null = null
 
   constructor(domain: ChangeDomain | null, spec: UniqueSortedSpec<I, K>) {
     const parsedKey = parseSortKeySpec(spec.key)
@@ -171,21 +180,76 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
     // Find insertion point using binary search
     const insertIndex = this.findInsertionIndex(item)
     this.sortedItems.splice(insertIndex, 0, item)
+    if (this.orderedView) {
+      this.domain!.emitArrayChangeOnBehalfOf(this.orderedView, {
+        type: "ArraySplice",
+        start: insertIndex,
+        deleteCount: 0,
+        items: [item],
+      })
+    }
   }
 
   protected removeValueWithKey(key: K): void {
     const index = this.findIndexByKey(key as SortKey)
     if (index >= 0) {
       this.sortedItems.splice(index, 1)
+      if (this.orderedView) {
+        this.domain!.emitArrayChangeOnBehalfOf(this.orderedView, {
+          type: "ArraySplice",
+          start: index,
+          deleteCount: 1,
+        })
+      }
     }
   }
 
   protected clearValues(): void {
+    const removed = this.sortedItems.length
     this.sortedItems.length = 0
+    if (this.orderedView && removed > 0) {
+      this.domain!.emitArrayChangeOnBehalfOf(this.orderedView, {
+        type: "ArraySplice",
+        start: 0,
+        deleteCount: removed,
+      })
+    }
   }
 
   protected isUnique(): boolean {
     return true
+  }
+
+  // ===========================================================================
+  // MappableOrdered implementation
+  // ===========================================================================
+
+  private requireReactiveDomain(): ChangeDomain {
+    if (!this.domain) {
+      throw new Error(
+        "orderedArray/createMappedArray require a reactive multindex (created with a change domain)",
+      )
+    }
+    return this.domain
+  }
+
+  /**
+   * Lazily create the change-enabled view over `sortedItems`. The view wraps the
+   * existing array in place, so `sortedItems` is unchanged and reads stay plain.
+   */
+  private ensureOrderedView(): I[] {
+    if (!this.orderedView) {
+      this.orderedView = this.requireReactiveDomain().enableChanges(this.sortedItems)
+    }
+    return this.orderedView
+  }
+
+  get orderedArray(): readonly I[] {
+    return this.ensureOrderedView()
+  }
+
+  createMappedArray<U>(fn: (item: I) => U): U[] {
+    return this.requireReactiveDomain().createMappedArray(this.ensureOrderedView(), fn)
   }
 
   // ===========================================================================
