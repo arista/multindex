@@ -15,12 +15,7 @@ import type {
 } from "./types.js"
 import { IndexImplBase, SubindexImpl, getFilterFn } from "./index-impl-base.js"
 import { KeyNotFoundError } from "./errors.js"
-import {
-  parseSortKeySpec,
-  ParsedSortKey,
-  compareKeys,
-  createItemComparator,
-} from "./sort-compare.js"
+import { parseSortKeySpec, ParsedSortKey, compareKeys } from "./sort-compare.js"
 import { SortedViewImpl, SortedDataSource } from "./sorted-view-impl.js"
 
 /**
@@ -38,8 +33,22 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
 {
   private readonly sortedItems: I[] = []
   private readonly parsedKey: ParsedSortKey<I>
-  private readonly itemComparator: (a: I, b: I) => number
   private readonly view: SortedViewImpl<I, PartialSortKey<K>>
+
+  /**
+   * The key each stored item is currently ordered by. All ordering reads go
+   * through this rather than the item's live key, so the index stays in control
+   * of its own sort key: when an item is re-keyed, its stored key holds the old
+   * value until the index deliberately updates it here. That keeps the array
+   * consistent (never transiently out of order relative to what searches see)
+   * and lets a re-keyed item be located by its old key even after the live
+   * property has already changed.
+   */
+  private entryKeys = new WeakMap<object, K>()
+
+  private storedKey(item: I): K {
+    return this.entryKeys.get(item as object) as K
+  }
 
   /**
    * A change-enabled view over `sortedItems`, created lazily on first use.
@@ -62,7 +71,6 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
     })
 
     this.parsedKey = parsedKey
-    this.itemComparator = createItemComparator(parsedKey)
     this.view = SortedViewImpl.create<I, PartialSortKey<K>>(this)
   }
 
@@ -109,7 +117,7 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
 
     while (low < high) {
       const mid = (low + high) >>> 1
-      const midKey = this.parsedKey.getKey(this.sortedItems[mid]!)
+      const midKey = this.storedKey(this.sortedItems[mid]!)
       const cmp = compareKeys(midKey, target, directions)
       if (cmp < 0) {
         low = mid + 1
@@ -130,7 +138,7 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
 
     while (low < high) {
       const mid = (low + high) >>> 1
-      const midKey = this.parsedKey.getKey(this.sortedItems[mid]!)
+      const midKey = this.storedKey(this.sortedItems[mid]!)
       const cmp = compareKeys(midKey, target, directions)
       if (cmp <= 0) {
         low = mid + 1
@@ -175,10 +183,10 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
     return this.sortedItems[index] ?? null
   }
 
-  protected addValueWithKey(value: I | SubindexImpl<I>): void {
+  protected addValueWithKey(value: I | SubindexImpl<I>, key: K): void {
     const item = value as I
-    // Find insertion point using binary search
-    const insertIndex = this.findInsertionIndex(item)
+    this.entryKeys.set(item as object, key)
+    const insertIndex = this.findInsertionIndex(key as SortKey)
     this.sortedItems.splice(insertIndex, 0, item)
     if (this.orderedView) {
       this.domain!.emitArrayChangeOnBehalfOf(this.orderedView, {
@@ -193,7 +201,9 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
   protected removeValueWithKey(key: K): void {
     const index = this.findIndexByKey(key as SortKey)
     if (index >= 0) {
+      const item = this.sortedItems[index]!
       this.sortedItems.splice(index, 1)
+      this.entryKeys.delete(item as object)
       if (this.orderedView) {
         this.domain!.emitArrayChangeOnBehalfOf(this.orderedView, {
           type: "ArraySplice",
@@ -207,6 +217,7 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
   protected clearValues(): void {
     const removed = this.sortedItems.length
     this.sortedItems.length = 0
+    this.entryKeys = new WeakMap()
     if (this.orderedView && removed > 0) {
       this.domain!.emitArrayChangeOnBehalfOf(this.orderedView, {
         type: "ArraySplice",
@@ -214,6 +225,64 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
         deleteCount: removed,
       })
     }
+  }
+
+  /**
+   * When an item stays included but is re-keyed, relocate it in place and emit a
+   * single ArrayMove. The item's stored key still holds `beforeKey` (searches go
+   * through entryKeys, not the live property), so it's found normally; we then
+   * update the stored key and reposition only if the item actually needs to move.
+   */
+  protected updateValueWithKey(
+    item: I,
+    beforeKey: K,
+    afterKey: K,
+    beforeIncluded: boolean,
+    afterIncluded: boolean,
+  ): number {
+    if (beforeIncluded && afterIncluded) {
+      const from = this.findIndexByKey(beforeKey as SortKey)
+      if (from >= 0) {
+        this.entryKeys.set(item as object, afterKey)
+
+        // If it's still correctly ordered between its neighbors, don't move it.
+        const directions = this.parsedKey.directions
+        const leftOk =
+          from === 0 ||
+          compareKeys(
+            this.storedKey(this.sortedItems[from - 1]!) as SortKey,
+            afterKey,
+            directions,
+          ) <= 0
+        const rightOk =
+          from === this.sortedItems.length - 1 ||
+          compareKeys(
+            this.storedKey(this.sortedItems[from + 1]!) as SortKey,
+            afterKey,
+            directions,
+          ) >= 0
+
+        if (!leftOk || !rightOk) {
+          this.sortedItems.splice(from, 1)
+          const to = this.findInsertionIndex(afterKey as SortKey)
+          this.sortedItems.splice(to, 0, item)
+          if (this.orderedView) {
+            this.domain!.emitArrayChangeOnBehalfOf(this.orderedView, {
+              type: "ArrayMove",
+              from,
+              to,
+            })
+          }
+        }
+
+        // Keyed subscribers of both the old and new key see a mutation.
+        this.notifyKeyMutation(beforeKey)
+        this.notifyKeyMutation(afterKey)
+        return 0
+      }
+    }
+
+    return super.updateValueWithKey(item, beforeKey, afterKey, beforeIncluded, afterIncluded)
   }
 
   protected isUnique(): boolean {
@@ -257,15 +326,17 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
   // ===========================================================================
 
   /**
-   * Find the index where an item should be inserted to maintain sort order.
+   * Find the index where the given key should be inserted to maintain sort
+   * order (lower bound), comparing against stored keys.
    */
-  private findInsertionIndex(item: I): number {
+  private findInsertionIndex(key: SortKey): number {
+    const directions = this.parsedKey.directions
     let low = 0
     let high = this.sortedItems.length
 
     while (low < high) {
       const mid = (low + high) >>> 1
-      const cmp = this.itemComparator(this.sortedItems[mid]!, item)
+      const cmp = compareKeys(this.storedKey(this.sortedItems[mid]!) as SortKey, key, directions)
       if (cmp < 0) {
         low = mid + 1
       } else {
@@ -288,7 +359,7 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
 
     while (low <= high) {
       const mid = (low + high) >>> 1
-      const midKey = this.parsedKey.getKey(this.sortedItems[mid]!)
+      const midKey = this.storedKey(this.sortedItems[mid]!)
       const cmp = compareKeys(midKey, key, directions)
 
       if (cmp < 0) {
@@ -326,10 +397,7 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
    * Check if an item is in the index
    */
   has(item: I): boolean {
-    const key = this.parsedKey.getKey(item) as K
-    const index = this.findIndexByKey(key as SortKey)
-    if (index < 0) return false
-    return this.sortedItems[index] === item
+    return this.entryKeys.has(item as object)
   }
 
   /**
@@ -371,7 +439,7 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
 
   private *keysIterator(): IterableIterator<K> {
     for (const item of this.sortedItems) {
-      yield this.parsedKey.getKey(item) as K
+      yield this.storedKey(item)
     }
   }
 

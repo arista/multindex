@@ -82,4 +82,54 @@ describe("UniqueSortedIndexImpl — mapped arrays", () => {
     assert.throws(() => index.createMappedArray((i) => i.label), /reactive/)
     assert.throws(() => index.orderedArray, /reactive/)
   })
+
+  describe("re-key emits a single move", () => {
+    it("relocates a re-keyed item with one ArrayMove (no duplicate)", () => {
+      const domain = new ChangeDomain()
+      const index = makeIndex(domain)
+      const a = index.add(domain.enableChanges({ seqId: 1, label: "a" }))
+      index.add(domain.enableChanges({ seqId: 2, label: "b" }))
+      index.add(domain.enableChanges({ seqId: 3, label: "c" }))
+
+      const mapped = index.createMappedArray((i) => i.label)
+      const deltas: Change[] = []
+      domain.subscribe(mapped, (c) => deltas.push(c))
+
+      a.seqId = 10 // moves 'a' to the end
+      assert.deepEqual([...mapped], ["b", "c", "a"])
+      assert.equal(deltas.length, 1)
+      assert.equal(deltas[0]!.type, "ArrayMove")
+      if (deltas[0]!.type === "ArrayMove") {
+        assert.equal(deltas[0]!.from, 0)
+        assert.equal(deltas[0]!.to, 2)
+      }
+    })
+
+    it("moves back to the front", () => {
+      const domain = new ChangeDomain()
+      const index = makeIndex(domain)
+      index.add(domain.enableChanges({ seqId: 1, label: "a" }))
+      index.add(domain.enableChanges({ seqId: 2, label: "b" }))
+      const c = index.add(domain.enableChanges({ seqId: 3, label: "c" }))
+
+      const mapped = index.createMappedArray((i) => i.label)
+      c.seqId = 0
+      assert.deepEqual([...mapped], ["c", "a", "b"])
+    })
+
+    it("emits nothing when the position does not change", () => {
+      const domain = new ChangeDomain()
+      const index = makeIndex(domain)
+      const a = index.add(domain.enableChanges({ seqId: 1, label: "a" }))
+      index.add(domain.enableChanges({ seqId: 5, label: "b" }))
+
+      const mapped = index.createMappedArray((i) => i.label)
+      const deltas: Change[] = []
+      domain.subscribe(mapped, (c) => deltas.push(c))
+
+      a.seqId = 3 // still sorts before 'b' — same position
+      assert.deepEqual([...mapped], ["a", "b"])
+      assert.equal(deltas.length, 0)
+    })
+  })
 })

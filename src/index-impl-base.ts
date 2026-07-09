@@ -550,15 +550,45 @@ export abstract class IndexImplBase<I, K> {
       return
     }
 
-    // Re-index the item
-    const removeResult = this.removeIncludedItem(item, oldKey, oldIncluded)
-    const addResult = this.addIncludedItem(item, newKey, newIncluded)
+    // Re-index the item through updateValueWithKey so ordered indexes can
+    // relocate it in place; the default removes at the old key and adds at the
+    // new.
+    const countChange = this.updateValueWithKey(
+      item,
+      oldKey as K,
+      newKey as K,
+      oldIncluded,
+      newIncluded,
+    )
 
     // Update count (already done in remove/add, but need to notify parent)
-    const countChange = removeResult.countChange + addResult.countChange
     if (countChange !== 0 && this.parent) {
       this.parent.subindexCountChanged(countChange)
     }
+  }
+
+  /**
+   * Apply a combined change to an item's stored value: it moves from `beforeKey`
+   * (present iff `beforeIncluded`) to `afterKey` (present iff `afterIncluded`).
+   * The default removes then re-adds. Indexes that can take advantage of knowing
+   * it's a single update — e.g. an ordered index relocating a re-keyed item —
+   * override this to do so and emit a single move. Returns the net count change.
+   */
+  protected updateValueWithKey(
+    item: I,
+    beforeKey: K,
+    afterKey: K,
+    beforeIncluded: boolean,
+    afterIncluded: boolean,
+  ): number {
+    let countChange = 0
+    if (beforeIncluded) {
+      countChange += this.removeIncludedItem(item, beforeKey, true).countChange
+    }
+    if (afterIncluded) {
+      countChange += this.addIncludedItem(item, afterKey, true).countChange
+    }
+    return countChange
   }
 
   /**
