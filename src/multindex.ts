@@ -3,6 +3,7 @@
  */
 
 import type { ChangeDomain } from "chchchchanges"
+import { markRaw } from "chchchchanges"
 import type { Multindex, SetIndex, IndexBase } from "./interfaces.js"
 import type { IndexBuilder, IndexBuilderFn } from "./specs.js"
 import type { MultindexConfig } from "./types.js"
@@ -73,6 +74,10 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
     domain: ChangeDomain | null,
     isSubtype: boolean,
   ) {
+    // A multindex manages its own reactivity; it must never be deep-proxied if
+    // it happens to be nested inside change-enabled state.
+    markRaw(this)
+
     this.indexes = indexes
     this.indexList = Object.values(indexes)
     this.domain = domain
