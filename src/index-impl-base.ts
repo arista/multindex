@@ -8,7 +8,7 @@
  */
 
 import type { ChangeDomain } from "chchchchanges"
-import { ChangeSource } from "chchchchanges"
+import { ChangeSource, markRaw } from "chchchchanges"
 import { AddedItem } from "./added-item.js"
 import type { AddResult, RemoveResult } from "./types.js"
 import type { FilterSpec, MapKeySpec } from "./specs.js"
@@ -108,6 +108,10 @@ export abstract class IndexImplBase<I, K> {
   private keySources: Map<unknown, ChangeSource> | null = null
 
   constructor(config: IndexImplConfig<I, K>) {
+    // An index manages its own reactivity; it must never be deep-proxied if it
+    // is nested inside change-enabled state (e.g. a bare index on a model).
+    markRaw(this)
+
     this.domain = config.domain
     this.keyFn = config.keyFn
     this.keySetFn = config.keySetFn

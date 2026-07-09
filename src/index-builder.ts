@@ -3,6 +3,7 @@
  */
 
 import type { ChangeDomain } from "chchchchanges"
+import { markRaw } from "chchchchanges"
 import type {
   IndexBase,
   SetIndex,
@@ -237,6 +238,7 @@ class NestedMultindexImpl<I, IXS extends Record<string, IndexBase<I>>> implement
   private readonly indexList: IndexBase<I>[]
 
   constructor(domain: ChangeDomain | null, indexes: IXS) {
+    markRaw(this)
     this.setIndex = new SetIndexImpl<I>(domain, {})
     this.indexes = indexes
     this.indexList = Object.values(indexes)
