@@ -47,6 +47,29 @@ export interface IndexBase<I> extends Iterable<I> {
    * datasets.
    */
   addMany(items: Iterable<I>): I[]
+
+  /**
+   * Remove all items, disposing each item's reactive bookkeeping. Ordered views
+   * announce a single bulk-remove delta.
+   */
+  clear(): void
+
+  /**
+   * Replace the entire contents with a new set of items — a {@link clear}
+   * followed by {@link addMany}, wrapped in one transaction so subscribers
+   * observe only the settled end state (never the transient empty index in
+   * between). Use this for a full dataset reload from the server. Returns the
+   * (possibly reactively-wrapped) items in input order.
+   *
+   * This is a wholesale replacement: every current item is removed and every new
+   * item added, so there is no per-item diffing — for a full replace, surgical
+   * reuse buys nothing (every row is a new object).
+   *
+   * Failure semantics: the clear happens first, so if a new item is invalid
+   * (e.g. a duplicate key) the call throws and the collection is left **empty** —
+   * pass a consistent dataset (as a server payload should be).
+   */
+  replaceAll(items: Iterable<I>): I[]
 }
 
 /**

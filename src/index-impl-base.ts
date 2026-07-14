@@ -457,6 +457,29 @@ export abstract class IndexImplBase<I, K> {
   }
 
   /**
+   * Replace all items with a new set: {@link clear} then {@link addMany}, wrapped
+   * in one transaction so the empty intermediate state is never observed. Uses
+   * the (possibly overridden) `addMany`, so sorted indexes still merge in one
+   * pass.
+   */
+  replaceAll(items: Iterable<I>): I[] {
+    const materialized = Array.from(items)
+    const run = () => {
+      this.clear()
+      try {
+        return this.addMany(materialized)
+      } catch (e) {
+        // Invalid input threw partway through: clear again so the index lands
+        // empty rather than partially applied (transactions batch notifications,
+        // they don't roll back mutations).
+        this.clear()
+        throw e
+      }
+    }
+    return this.domain ? this.domain.withTransaction(run) : run()
+  }
+
+  /**
    * Internal: add an item that passes its filter
    */
   protected addIncludedItem(item: I, key: K | null, included: boolean): AddResult {

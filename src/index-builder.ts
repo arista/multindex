@@ -236,9 +236,11 @@ class NestedMultindexImpl<I, IXS extends Record<string, IndexBase<I>>> implement
   private readonly setIndex: SetIndexImpl<I>
   private readonly indexes: IXS
   private readonly indexList: IndexBase<I>[]
+  private readonly domain: ChangeDomain | null
 
   constructor(domain: ChangeDomain | null, indexes: IXS) {
     markRaw(this)
+    this.domain = domain
     this.setIndex = new SetIndexImpl<I>(domain, {})
     this.indexes = indexes
     this.indexList = Object.values(indexes)
@@ -299,12 +301,34 @@ class NestedMultindexImpl<I, IXS extends Record<string, IndexBase<I>>> implement
   }
 
   clear(): void {
-    this.setIndex.clear()
-    for (const index of this.indexList) {
-      const clearable = index as IndexBase<I> & { clear?(): void }
-      if (clearable.clear) {
-        clearable.clear()
+    const doClear = () => {
+      this.setIndex.clear()
+      for (const index of this.indexList) {
+        const clearable = index as IndexBase<I> & { clear?(): void }
+        if (clearable.clear) {
+          clearable.clear()
+        }
       }
     }
+    if (this.domain) {
+      this.domain.withTransaction(() => doClear())
+    } else {
+      doClear()
+    }
+  }
+
+  replaceAll(items: Iterable<I>): I[] {
+    const materialized = Array.from(items)
+    const run = () => {
+      this.clear()
+      try {
+        return this.addMany(materialized)
+      } catch (e) {
+        // Clear again so invalid input leaves this empty, not half-applied.
+        this.clear()
+        throw e
+      }
+    }
+    return this.domain ? this.domain.withTransaction(run) : run()
   }
 }

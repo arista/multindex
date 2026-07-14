@@ -349,14 +349,47 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
    * Clear all items from the Multindex and all contained indexes.
    */
   clear(): void {
-    this.itemSet.clear()
+    const doClear = () => {
+      this.itemSet.clear()
 
-    for (const index of this.indexList) {
-      const clearable = index as IndexBase<I> & { clear?(): void }
-      if (clearable.clear) {
-        clearable.clear()
+      for (const index of this.indexList) {
+        const clearable = index as IndexBase<I> & { clear?(): void }
+        if (clearable.clear) {
+          clearable.clear()
+        }
       }
     }
+
+    // One transaction so a multi-index clear settles atomically.
+    if (this.domain) {
+      this.domain.withTransaction(() => doClear())
+    } else {
+      doClear()
+    }
+  }
+
+  /**
+   * Replace the entire contents with a new dataset — clear then addMany, in one
+   * transaction so subscribers never see the empty index in between. The natural
+   * fit for a full reload from the server. Returns the (possibly wrapped) items
+   * in input order.
+   */
+  replaceAll(items: Iterable<I>): I[] {
+    const materialized = Array.from(items)
+    const run = () => {
+      this.clear()
+      try {
+        return this.addMany(materialized)
+      } catch (e) {
+        // Invalid input threw partway through the fan-out. Transactions batch
+        // notifications but don't roll back mutations, so clear again rather
+        // than leave a half-applied, itemSet-vs-index-inconsistent state: the
+        // collection lands empty, not corrupt.
+        this.clear()
+        throw e
+      }
+    }
+    return this.domain ? this.domain.withTransaction(run) : run()
   }
 }
 
