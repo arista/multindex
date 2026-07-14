@@ -442,6 +442,21 @@ export abstract class IndexImplBase<I, K> {
   }
 
   /**
+   * Add many items at once. The default just loops {@link addInternal}, which is
+   * already optimal for map/set/btree storage (no per-item O(n) shift). Sorted
+   * indexes override this to merge the batch in one pass. Atomicity of the whole
+   * batch is provided by the enclosing Multindex transaction, not here.
+   */
+  addMany(items: Iterable<I>): I[] {
+    const added: I[] = []
+    for (const item of items) {
+      this.addInternal(item)
+      added.push(item)
+    }
+    return added
+  }
+
+  /**
    * Internal: add an item that passes its filter
    */
   protected addIncludedItem(item: I, key: K | null, included: boolean): AddResult {

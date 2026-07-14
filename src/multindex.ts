@@ -69,11 +69,7 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
   // Marker for SubtypeMultindex type narrowing (only true when created as subtype)
   readonly isSubtypeMultindex: boolean
 
-  private constructor(
-    indexes: IXS,
-    domain: ChangeDomain | null,
-    isSubtype: boolean,
-  ) {
+  private constructor(indexes: IXS, domain: ChangeDomain | null, isSubtype: boolean) {
     // A multindex manages its own reactivity; it must never be deep-proxied if
     // it happens to be nested inside change-enabled state.
     markRaw(this)
@@ -254,6 +250,54 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
     }
 
     return trackedItem
+  }
+
+  /**
+   * Add many items to the Multindex and all contained indexes in one batch.
+   *
+   * Equivalent to calling {@link add} for each item, but the whole batch settles
+   * as a single change notification (one transaction), and sorted indexes merge
+   * the batch into their order in one pass rather than splicing item-by-item.
+   * Returns the (possibly reactively-wrapped) items in input order.
+   */
+  addMany(items: Iterable<I>): I[] {
+    // Wrap each item reactively (as `add` does), collect into the main set, and
+    // materialize the tracked batch so every index sees the same array.
+    const tracked: I[] = []
+
+    const doAddMany = () => {
+      for (const item of items) {
+        let trackedItem = item
+        if (this.domain && typeof item === "object" && item !== null) {
+          trackedItem = this.domain.enableChanges(item)
+        }
+        this.itemSet.add(trackedItem)
+        tracked.push(trackedItem)
+      }
+
+      // Fan the batch out to contained indexes (subtype indexes get items via
+      // their own add path, as in `add`).
+      for (const index of this.indexList) {
+        if (!isSubtypeMultindex(index)) {
+          index.addMany(tracked)
+        }
+      }
+
+      // Propagate up to supertype if this is a subtype.
+      if (this.supertypeIndex) {
+        this.supertypeIndex.addMany(tracked as unknown[])
+      }
+    }
+
+    // One transaction for the whole batch, so subscribers observe only the
+    // settled end state — never a partially-populated index.
+    if (this.domain) {
+      this.domain.withTransaction(() => doAddMany())
+    } else {
+      doAddMany()
+    }
+
+    return tracked
   }
 
   /**

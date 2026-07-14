@@ -14,7 +14,7 @@ import type {
   PartialSortKey,
 } from "./types.js"
 import { IndexImplBase, SubindexImpl, getFilterFn } from "./index-impl-base.js"
-import { KeyNotFoundError } from "./errors.js"
+import { KeyNotFoundError, UniquenessViolationError } from "./errors.js"
 import { parseSortKeySpec, ParsedSortKey, compareKeys } from "./sort-compare.js"
 import { SortedViewImpl, SortedDataSource } from "./sorted-view-impl.js"
 
@@ -384,6 +384,112 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
   add(item: I): I {
     this.addInternal(item)
     return item
+  }
+
+  /**
+   * Add many items in one batch.
+   *
+   * Uniqueness is validated up front (so a violation leaves the index
+   * untouched), then the sorted batch is merged into `sortedItems` in a single
+   * linear pass — O(n+k) — instead of splicing each item in turn (O(n·k)).
+   *
+   * The ordered view receives one ArraySplice per genuinely-new item, emitted in
+   * ascending final-index order. Because they are ascending, each splice's index
+   * is exactly the item's final position (everything before it is already in
+   * place), so the delta stream reconstructs the merged array precisely. The
+   * whole batch settles atomically inside the enclosing Multindex transaction.
+   */
+  addMany(items: Iterable<I>): I[] {
+    const directions = this.parsedKey.directions
+    const result: I[] = []
+
+    // --- Gather: compute key/inclusion for genuinely-new items. No mutation
+    // yet, so a uniqueness violation below leaves the index untouched. ---
+    const included: Array<{ item: I; key: K }> = []
+    const excluded: I[] = []
+    const seen = new Set<object>() // dedupe repeats within the batch (re-add is a no-op)
+    for (const item of items) {
+      result.push(item)
+      const obj = item as object
+      if (this.getAddedItem(item) !== null || seen.has(obj)) continue
+      seen.add(obj)
+      const key = this.keyFn ? this.keyFn(item) : (null as K)
+      const isIncluded = this.filterFn ? this.filterFn(item) : true
+      if (isIncluded) included.push({ item, key })
+      else excluded.push(item)
+    }
+
+    // --- Validate uniqueness: sort the batch, scan for adjacent equal keys, and
+    // probe existing items by binary search. Nothing committed yet. ---
+    included.sort((a, b) => compareKeys(a.key as SortKey, b.key as SortKey, directions))
+    for (let i = 0; i < included.length; i++) {
+      const key = included[i]!.key
+      if (i > 0 && this.keysEqual(included[i - 1]!.key, key)) {
+        throw new UniquenessViolationError(key)
+      }
+      if (key !== null && this.findIndexByKey(key as SortKey) >= 0) {
+        throw new UniquenessViolationError(key)
+      }
+    }
+
+    // --- Commit: bookkeeping/watches and stored keys, then merge + notify. ---
+    for (const item of excluded) this.createAddedItem(item)
+    for (const { item, key } of included) {
+      this.createAddedItem(item)
+      this.entryKeys.set(item as object, key)
+    }
+
+    if (included.length > 0) {
+      // Both inputs are ordered by stored key (existing already sorted; the
+      // batch just sorted and its keys stored), so merge in one linear pass,
+      // recording each addition's landing index for the delta stream.
+      const additions = included.map((e) => e.item)
+      const merged: I[] = []
+      const insertions: Array<{ item: I; index: number }> = []
+      let i = 0
+      let j = 0
+      while (i < this.sortedItems.length && j < additions.length) {
+        const cmp = compareKeys(
+          this.storedKey(this.sortedItems[i]!) as SortKey,
+          this.storedKey(additions[j]!) as SortKey,
+          directions,
+        )
+        if (cmp <= 0) {
+          merged.push(this.sortedItems[i++]!)
+        } else {
+          insertions.push({ item: additions[j]!, index: merged.length })
+          merged.push(additions[j++]!)
+        }
+      }
+      while (i < this.sortedItems.length) merged.push(this.sortedItems[i++]!)
+      while (j < additions.length) {
+        insertions.push({ item: additions[j]!, index: merged.length })
+        merged.push(additions[j++]!)
+      }
+
+      // Swap the raw array's contents in place (no spread — safe at any size).
+      // The ordered view proxies this same array; mutating the raw target is
+      // silent, so the explicit ArraySplices below are the only notifications.
+      this.sortedItems.length = 0
+      for (let k = 0; k < merged.length; k++) this.sortedItems[k] = merged[k]!
+
+      if (this.orderedView) {
+        for (const { item, index } of insertions) {
+          this.domain!.emitArrayChangeOnBehalfOf(this.orderedView, {
+            type: "ArraySplice",
+            start: index,
+            deleteCount: 0,
+            items: [item],
+          })
+        }
+      }
+
+      this._count += included.length
+      for (const { key } of included) this.notifyKeyMutation(key)
+      if (this.parent) this.parent.subindexCountChanged(included.length)
+    }
+
+    return result
   }
 
   /**

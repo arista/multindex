@@ -277,6 +277,17 @@ class NestedMultindexImpl<I, IXS extends Record<string, IndexBase<I>>> implement
     return item
   }
 
+  addMany(items: Iterable<I>): I[] {
+    // Materialize once: the batch fans out to several consumers, and a bare
+    // iterable (e.g. a generator) would be exhausted by the first.
+    const batch = Array.from(items)
+    this.setIndex.addMany(batch)
+    for (const index of this.indexList) {
+      index.addMany(batch)
+    }
+    return batch
+  }
+
   remove(item: I): void {
     this.setIndex.remove(item)
     for (const index of this.indexList) {

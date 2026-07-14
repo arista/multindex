@@ -36,6 +36,17 @@ export interface IndexBase<I> extends Iterable<I> {
    * met (setter not supplied, not a subindex, etc.)
    */
   add(item: I): I
+
+  /**
+   * Add many items at once, returning them in input order.
+   *
+   * Semantically equivalent to calling {@link add} for each item, but the whole
+   * batch settles as a single change notification (one transaction), and sorted
+   * indexes merge the batch into their order in one pass (O(n+k)) rather than
+   * splicing item-by-item (O(n·k)). Prefer this for bulk ingest of large
+   * datasets.
+   */
+  addMany(items: Iterable<I>): I[]
 }
 
 /**
