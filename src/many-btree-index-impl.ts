@@ -17,7 +17,12 @@ import type {
   SingleSortKey,
   PartialSortKey,
 } from "./types.js"
-import { IndexImplBase, SubindexImpl, getFilterFn } from "./index-impl-base.js"
+import {
+  IndexImplBase,
+  SubindexImpl,
+  getFilterFn,
+  attachSubindexParent,
+} from "./index-impl-base.js"
 import { parseSortKeySpec, ParsedSortKey, compareKeys } from "./sort-compare.js"
 import { SortedViewImpl, SortedDataSource } from "./sorted-view-impl.js"
 
@@ -159,11 +164,8 @@ export class ManyBTreeIndexImpl<I, K extends SingleSortKey, SUBIX extends IndexB
     // Create new subindex
     const subix = this.createSubindex()
 
-    // Set parent reference if the subindex supports it
-    if (subix instanceof IndexImplBase) {
-      subix.parent = this as unknown as IndexImplBase<I, unknown>
-      subix.keyInParent = key
-    }
+    // Record where this subindex lives (for path diagnostics).
+    attachSubindexParent(subix, this, key)
 
     this.btree.set(key as SortKey, subix)
     return asSubindexImpl(subix)

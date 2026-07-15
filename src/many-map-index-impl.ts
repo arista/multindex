@@ -12,6 +12,7 @@ import {
   getKeyFn,
   getKeySetFn,
   getFilterFn,
+  attachSubindexParent,
 } from "./index-impl-base.js"
 
 /**
@@ -62,11 +63,9 @@ export class ManyMapIndexImpl<I, K, SUBIX extends IndexBase<I>>
     let subix = this.map.get(key)
     if (!subix) {
       subix = this.createSubindex()
-      // Set parent reference if the subindex supports it
-      if (subix instanceof IndexImplBase) {
-        subix.parent = this as unknown as IndexImplBase<I, unknown>
-        subix.keyInParent = key
-      }
+      // Record where this subindex lives (for path diagnostics) — works for
+      // plain indexes and nested multindexes alike.
+      attachSubindexParent(subix, this, key)
       this.map.set(key, subix)
     }
     return asSubindexImpl(subix)

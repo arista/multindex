@@ -38,6 +38,7 @@ import { ManyMapIndexImpl } from "./many-map-index-impl.js"
 import { ManySortedIndexImpl } from "./many-sorted-index-impl.js"
 import { ManyBTreeIndexImpl } from "./many-btree-index-impl.js"
 import { createSubtypeMultindex } from "./multindex.js"
+import { attachContainer, fmtSubindexKey, type IndexPathNode } from "./index-impl-base.js"
 
 /**
  * Implementation of IndexBuilder.
@@ -232,11 +233,18 @@ export class IndexBuilderImpl<I> implements IndexBuilder<I> {
  * This is a SetIndex that also contains additional named indexes.
  * Unlike the top-level Multindex, it participates in the index hierarchy.
  */
-class NestedMultindexImpl<I, IXS extends Record<string, IndexBase<I>>> implements SetIndex<I> {
+class NestedMultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
+  implements SetIndex<I>, IndexPathNode
+{
   private readonly setIndex: SetIndexImpl<I>
   private readonly indexes: IXS
   private readonly indexList: IndexBase<I>[]
   private readonly domain: ChangeDomain | null
+
+  // This nested multindex is the subindex at `keyInParent` of the many-index
+  // `parent` — its position for path diagnostics.
+  parent: IndexPathNode | null = null
+  keyInParent: unknown = null
 
   constructor(domain: ChangeDomain | null, indexes: IXS) {
     markRaw(this)
@@ -245,10 +253,25 @@ class NestedMultindexImpl<I, IXS extends Record<string, IndexBase<I>>> implement
     this.indexes = indexes
     this.indexList = Object.values(indexes)
 
-    // Copy index properties onto this instance
+    // Copy index properties onto this instance, recording container + name so
+    // each index can report its full path.
     for (const [key, value] of Object.entries(indexes)) {
       ;(this as Record<string, unknown>)[key] = value
+      attachContainer(value, this, key)
     }
+  }
+
+  /** Record that this nested multindex is the subindex at `key` of `parent`. */
+  attachAsSubindex(parent: IndexPathNode, key: unknown): void {
+    this.parent = parent
+    this.keyInParent = key
+  }
+
+  /** The path locating this nested multindex, e.g. `…byModuleId["14"]`. */
+  pathString(): string {
+    return this.parent != null
+      ? `${this.parent.pathString()}${fmtSubindexKey(this.keyInParent)}`
+      : ""
   }
 
   get count(): number {

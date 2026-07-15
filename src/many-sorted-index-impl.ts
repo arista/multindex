@@ -13,7 +13,12 @@ import type {
   SingleSortKey,
   PartialSortKey,
 } from "./types.js"
-import { IndexImplBase, SubindexImpl, getFilterFn } from "./index-impl-base.js"
+import {
+  IndexImplBase,
+  SubindexImpl,
+  getFilterFn,
+  attachSubindexParent,
+} from "./index-impl-base.js"
 import { parseSortKeySpec, ParsedSortKey, compareKeys } from "./sort-compare.js"
 import { SortedViewImpl, SortedDataSource } from "./sorted-view-impl.js"
 
@@ -194,11 +199,8 @@ export class ManySortedIndexImpl<I, K extends SingleSortKey, SUBIX extends Index
     const insertIndex = this.findInsertionIndex(key as SortKey)
     const subix = this.createSubindex()
 
-    // Set parent reference if the subindex supports it
-    if (subix instanceof IndexImplBase) {
-      subix.parent = this as unknown as IndexImplBase<I, unknown>
-      subix.keyInParent = key
-    }
+    // Record where this subindex lives (for path diagnostics).
+    attachSubindexParent(subix, this, key)
 
     this.sortedEntries.splice(insertIndex, 0, { key, subindex: subix })
     return asSubindexImpl(subix)

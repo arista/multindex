@@ -425,10 +425,10 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
     for (let i = 0; i < included.length; i++) {
       const key = included[i]!.key
       if (i > 0 && this.keysEqual(included[i - 1]!.key, key)) {
-        throw new UniquenessViolationError(key)
+        throw new UniquenessViolationError(key, this.pathString())
       }
       if (key !== null && this.findIndexByKey(key as SortKey) >= 0) {
-        throw new UniquenessViolationError(key)
+        throw new UniquenessViolationError(key, this.pathString())
       }
     }
 

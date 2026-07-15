@@ -8,6 +8,7 @@ import type { Multindex, SetIndex, IndexBase } from "./interfaces.js"
 import type { IndexBuilder, IndexBuilderFn } from "./specs.js"
 import type { MultindexConfig } from "./types.js"
 import { IndexBuilderImpl } from "./index-builder.js"
+import { attachContainer } from "./index-impl-base.js"
 
 /**
  * Internal interface for indexes that support item removal
@@ -112,6 +113,9 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
       // Connect subtype indexes to this Multindex
       if (isSubtypeMultindex(value)) {
         value.setSupertype(multindex as unknown as Multindex<unknown>, key)
+      } else {
+        // Record container + name so the index can report its full path.
+        attachContainer(value, multindex, key)
       }
     }
 
@@ -131,6 +135,11 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
     // Copy index properties onto the multindex instance
     for (const [key, value] of Object.entries(indexes)) {
       ;(multindex as unknown as Record<string, unknown>)[key] = value
+      // Record container + name for path diagnostics. (Subtype multindexes among
+      // these get their name via setSupertype when connected to their parent.)
+      if (!isSubtypeMultindex(value)) {
+        attachContainer(value, multindex, key)
+      }
     }
 
     return multindex as unknown as SubtypeMultindex<I> & IXS
@@ -189,6 +198,15 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
     if (!this.propertyName) return null
     const parentName = this.supertypeIndex?.subtypeName
     return parentName ? `${parentName}.${this.propertyName}` : this.propertyName
+  }
+
+  /**
+   * The path prefix for indexes contained in this Multindex (IndexPathNode).
+   * "" for a root Multindex; the subtype path (e.g. "modelItem.moduleItem") for
+   * a subtype Multindex.
+   */
+  pathString(): string {
+    return this.subtypeName ?? ""
   }
 
   /**

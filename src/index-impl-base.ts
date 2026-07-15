@@ -25,6 +25,46 @@ export interface SubindexImpl<I> {
 }
 
 /**
+ * Anything that can report a dotted/bracketed path locating it within a
+ * Multindex (indexes, multindexes, nested multindexes). Used to build helpful
+ * diagnostics — e.g. the path in a UniquenessViolationError. Returns "" when the
+ * node is standalone / not attached to a container.
+ */
+export interface IndexPathNode {
+  pathString(): string
+}
+
+/** Format a subindex key for a path segment, JSON-natural: 14 -> `[14]`, "foo" -> `["foo"]`. */
+export function fmtSubindexKey(key: unknown): string {
+  return `[${JSON.stringify(key)}]`
+}
+
+/** Join a container's path with a property name, handling the empty (root) prefix. */
+export function joinPath(prefix: string, name: string): string {
+  return prefix === "" ? name : `${prefix}.${name}`
+}
+
+/**
+ * Record (if the node supports it) that `node` is the property `name` of
+ * `container`, so it can report its full path later. Duck-typed to avoid
+ * import cycles between the base, the multindex, and the builder.
+ */
+export function attachContainer(node: unknown, container: IndexPathNode, name: string): void {
+  ;(node as { attachToContainer?(c: IndexPathNode, n: string): void }).attachToContainer?.(
+    container,
+    name,
+  )
+}
+
+/** Record (if supported) that `subindex` is the subindex at `key` of the many-index `parent`. */
+export function attachSubindexParent(subindex: unknown, parent: IndexPathNode, key: unknown): void {
+  ;(subindex as { attachAsSubindex?(p: IndexPathNode, k: unknown): void }).attachAsSubindex?.(
+    parent,
+    key,
+  )
+}
+
+/**
  * Configuration for creating an IndexImplBase
  */
 export interface IndexImplConfig<I, K> {
@@ -50,7 +90,7 @@ export interface IndexImplConfig<I, K> {
  * @typeParam I - The item type
  * @typeParam K - The key type (use `null` if the index doesn't use keys)
  */
-export abstract class IndexImplBase<I, K> {
+export abstract class IndexImplBase<I, K> implements IndexPathNode {
   /**
    * The parent index if this is a subindex, null otherwise.
    * Note: A Multindex is NOT considered a parent of its contained indexes.
@@ -61,6 +101,14 @@ export abstract class IndexImplBase<I, K> {
    * The key within the parent that references this subindex
    */
   keyInParent: unknown = null
+
+  /**
+   * The multindex/nested-multindex this index is a named property of, and the
+   * property name within it. Set when a container copies the index onto itself.
+   * Together with parent/keyInParent, these let pathString() locate the index.
+   */
+  container: IndexPathNode | null = null
+  nameInContainer: string | null = null
 
   /**
    * Map of items to their AddedItem bookkeeping structures.
@@ -117,6 +165,38 @@ export abstract class IndexImplBase<I, K> {
     this.keySetFn = config.keySetFn
     this.filterFn = config.filterFn
     this.subindexFn = config.subindexFn
+  }
+
+  // ===========================================================================
+  // Path / diagnostics
+  // ===========================================================================
+
+  /** Record that this index is the property `name` of the container `container`. */
+  attachToContainer(container: IndexPathNode, name: string): void {
+    this.container = container
+    this.nameInContainer = name
+  }
+
+  /** Record that this index is the subindex at `key` of the many-index `parent`. */
+  attachAsSubindex(parent: IndexPathNode, key: unknown): void {
+    this.parent = parent as unknown as IndexImplBase<I, unknown>
+    this.keyInParent = key
+  }
+
+  /**
+   * A dotted/bracketed path locating this index within its Multindex, e.g.
+   * `modelItem.moduleItem.byModuleId["14"].byName`. Built lazily by walking the
+   * container (named property) and parent (subindex-at-key) back-references.
+   * Returns "" if the index is standalone / not attached to a container.
+   */
+  pathString(): string {
+    if (this.container != null && this.nameInContainer != null) {
+      return joinPath(this.container.pathString(), this.nameInContainer)
+    }
+    if (this.parent != null) {
+      return `${this.parent.pathString()}${fmtSubindexKey(this.keyInParent)}`
+    }
+    return ""
   }
 
   // ===========================================================================
@@ -395,11 +475,9 @@ export abstract class IndexImplBase<I, K> {
     }
 
     const subindex = this.subindexFn!(key)
-    // Set parent reference if the subindex supports it
-    if (subindex instanceof IndexImplBase) {
-      subindex.parent = this as unknown as IndexImplBase<I, unknown>
-      subindex.keyInParent = key
-    }
+    // Record where this subindex lives (for path diagnostics). Works for any
+    // subindex kind — plain index or nested multindex — via duck typing.
+    attachSubindexParent(subindex, this, key)
     this.addValueWithKey(subindex, key)
     return subindex
   }
@@ -491,7 +569,7 @@ export abstract class IndexImplBase<I, K> {
     if (this.isUnique()) {
       // Unique index - check for uniqueness violation
       if (key !== null && this.getValueWithKey(key) !== null) {
-        throw new UniquenessViolationError(key)
+        throw new UniquenessViolationError(key, this.pathString())
       }
       this.addValueWithKey(item, key as K)
       this._count += 1

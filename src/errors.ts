@@ -19,9 +19,15 @@ export class MultindexError extends Error {
 export class UniquenessViolationError extends MultindexError {
   constructor(
     public readonly key: unknown,
+    public readonly indexPath?: string,
     message?: string,
   ) {
-    super(message ?? `Uniqueness violation: key already exists in index`)
+    super(
+      message ??
+        (indexPath
+          ? `Uniqueness violation: key "${key}" already exists at ${indexPath}`
+          : `Uniqueness violation: key "${key}" already exists in index`),
+    )
     this.name = "UniquenessViolationError"
   }
 }
