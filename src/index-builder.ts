@@ -286,6 +286,10 @@ class NestedMultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
     return this.setIndex.items
   }
 
+  toArray(): Array<I> {
+    return [...this.items]
+  }
+
   [Symbol.iterator](): Iterator<I> {
     return this.setIndex[Symbol.iterator]()
   }

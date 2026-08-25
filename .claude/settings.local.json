@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git config:*)",
+      "Bash(npm install)",
+      "Bash(npm run check:*)",
+      "Bash(npm run format:*)",
+      "Bash(git fetch:*)",
+      "Bash(git rebase:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm test)",
+      "Bash(npm run build:*)",
+      "Bash(git branch:*)",
+      "Bash(git reset:*)",
+      "Bash(xargs -r git branch -D)",
+      "Bash(npm run test:*)",
+      "Bash(npm run check:all:*)",
+      "Bash(npm run check:format:*)",
+      "Bash(npm run check:types:*)",
+      "Bash(npm run:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(npm install:*)",
+      "Bash(git show:*)"
+    ]
+  }
+}

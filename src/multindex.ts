@@ -177,6 +177,13 @@ class MultindexImpl<I, IXS extends Record<string, IndexBase<I>>>
   }
 
   /**
+   * Return an array equivalent to [...items]
+   */
+  toArray(): Array<I> {
+    return [...this.items]
+  }
+
+  /**
    * Make the Multindex iterable
    */
   [Symbol.iterator](): Iterator<I> {

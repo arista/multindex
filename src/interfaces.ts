@@ -26,6 +26,11 @@ export interface IndexBase<I> extends Iterable<I> {
   readonly items: IterableIterator<I>
 
   /**
+   * Return an array equivalent to [...items]
+   */
+  toArray(): Array<I>;
+
+  /**
    * Add an item to the index.
    *
    * On top-level Multindexes: wraps the item in a reactive Proxy (if reactivity

@@ -246,6 +246,15 @@ export abstract class IndexImplBase<I, K> implements IndexPathNode {
     return this.count === 0
   }
 
+  abstract readonly items: IterableIterator<I>
+
+  /**
+   * Return an array equivalent to [...items]
+   */
+  toArray(): Array<I> {
+    return [...this.items]
+  }
+
   // ===========================================================================
   // Index change tracking
   // ===========================================================================
