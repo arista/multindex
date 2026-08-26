@@ -206,6 +206,28 @@ describe("UniqueMapIndexImpl", () => {
       assert.ok(keys.includes(2))
     })
 
+    it("should iterate over key/item pairs", () => {
+      const index = new UniqueMapIndexImpl<User, number>(null, {
+        key: (u) => u.id,
+      })
+
+      const alice = { id: 1, name: "Alice", age: 30 }
+      const bob = { id: 2, name: "Bob", age: 25 }
+
+      index.add(alice)
+      index.add(bob)
+
+      const entries = Array.from(index.entries)
+      assert.strictEqual(entries.length, 2)
+      assert.deepStrictEqual(
+        entries.map(([k]) => k),
+        Array.from(index.keys),
+      )
+      for (const [key, item] of entries) {
+        assert.strictEqual(item, index.get(key))
+      }
+    })
+
     it("should iterate over items via items property", () => {
       const index = new UniqueMapIndexImpl<User, number>(null, {
         key: (u) => u.id,

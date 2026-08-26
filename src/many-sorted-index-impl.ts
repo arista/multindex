@@ -373,6 +373,19 @@ export class ManySortedIndexImpl<I, K extends SingleSortKey, SUBIX extends Index
   }
 
   /**
+   * Iterator over all key/value pairs in the index in sorted order
+   */
+  get entries(): IterableIterator<[K, SUBIX]> {
+    return this.entriesIterator()
+  }
+
+  private *entriesIterator(): IterableIterator<[K, SUBIX]> {
+    for (const entry of this.sortedEntries) {
+      yield [entry.key, entry.subindex]
+    }
+  }
+
+  /**
    * Iterator over all included items (across all subindexes) in sorted key order
    */
   get items(): IterableIterator<I> {

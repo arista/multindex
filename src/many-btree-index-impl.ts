@@ -274,6 +274,13 @@ export class ManyBTreeIndexImpl<I, K extends SingleSortKey, SUBIX extends IndexB
   }
 
   /**
+   * Iterator over all key/value pairs in sorted order
+   */
+  get entries(): IterableIterator<[K, SUBIX]> {
+    return this.btree.entries() as IterableIterator<[K, SUBIX]>
+  }
+
+  /**
    * Iterator over all included items (across all subindexes) in sorted key order
    */
   get items(): IterableIterator<I> {

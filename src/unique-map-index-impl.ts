@@ -132,6 +132,13 @@ export class UniqueMapIndexImpl<I, K> extends IndexImplBase<I, K> implements Uni
   }
 
   /**
+   * Iterator over all key/value pairs in the index
+   */
+  get entries(): IterableIterator<[K, I]> {
+    return this.map.entries()
+  }
+
+  /**
    * Iterator over all included items
    */
   get items(): IterableIterator<I> {

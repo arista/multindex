@@ -250,6 +250,59 @@ describe("ManyMapIndexImpl", () => {
       assert.ok(keys.includes("Sales"))
     })
 
+    it("should iterate over key/subindex pairs", () => {
+      const index = new ManyMapIndexImpl<User, string, SetIndexImpl<User>>(
+        null,
+        { key: (u) => u.department },
+        () => new SetIndexImpl<User>(null),
+      )
+
+      const alice = { id: 1, name: "Alice", department: "Engineering", age: 30 }
+      const bob = { id: 2, name: "Bob", department: "Engineering", age: 25 }
+      const carol = { id: 3, name: "Carol", department: "Sales", age: 35 }
+
+      index.add(alice)
+      index.add(bob)
+      index.add(carol)
+
+      const entries = Array.from(index.entries)
+      assert.strictEqual(entries.length, 2)
+      assert.deepStrictEqual(
+        entries.map(([k]) => k),
+        Array.from(index.keys),
+      )
+
+      const byKey = new Map(entries)
+      // The subindex is the same object tryGet hands back, not a copy
+      assert.strictEqual(byKey.get("Engineering"), index.tryGet("Engineering"))
+      assert.strictEqual(byKey.get("Engineering")!.count, 2)
+      assert.strictEqual(byKey.get("Sales")!.count, 1)
+    })
+
+    it("should include a subindex vivified by get() on an absent key", () => {
+      // get() creates and stores an empty subindex, and empty subindexes are
+      // only pruned when an item is removed - so it stays visible to entries.
+      const index = new ManyMapIndexImpl<User, string, SetIndexImpl<User>>(
+        null,
+        { key: (u) => u.department },
+        () => new SetIndexImpl<User>(null),
+      )
+
+      index.add({ id: 1, name: "Alice", department: "Engineering", age: 30 })
+      index.get("Sales")
+
+      const entries = Array.from(index.entries)
+      assert.strictEqual(entries.length, 2)
+
+      const sales = new Map(entries).get("Sales")
+      assert.ok(sales != null)
+      assert.strictEqual(sales.count, 0)
+
+      // tryGet does not vivify, so it leaves entries alone
+      index.tryGet("Marketing")
+      assert.strictEqual(Array.from(index.entries).length, 2)
+    })
+
     it("should iterate over items via items property", () => {
       const index = new ManyMapIndexImpl<User, string, SetIndexImpl<User>>(
         null,

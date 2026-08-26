@@ -191,6 +191,45 @@ describe("UniqueSortedIndexImpl", () => {
       const keys = Array.from(index.keys)
       assert.deepStrictEqual(keys, [1, 2, 3])
     })
+
+    it("should iterate key/item pairs in sorted order", () => {
+      const index = new UniqueSortedIndexImpl<User, number>(null, {
+        key: (u) => u.id,
+      })
+
+      const alice = { id: 3, name: "Alice", age: 30, createdAt: new Date() }
+      const bob = { id: 1, name: "Bob", age: 25, createdAt: new Date() }
+      const carol = { id: 2, name: "Carol", age: 35, createdAt: new Date() }
+
+      index.add(alice)
+      index.add(bob)
+      index.add(carol)
+
+      const entries = Array.from(index.entries)
+      assert.deepStrictEqual(
+        entries.map(([k]) => k),
+        [1, 2, 3],
+      )
+      assert.deepStrictEqual(
+        entries.map(([, item]) => item),
+        [bob, carol, alice],
+      )
+    })
+
+    it("should iterate key/item pairs in descending order when the key is descending", () => {
+      const index = new UniqueSortedIndexImpl<User, number>(null, {
+        key: { direction: "desc", get: (u) => u.id },
+      })
+
+      index.add({ id: 3, name: "Alice", age: 30, createdAt: new Date() })
+      index.add({ id: 1, name: "Bob", age: 25, createdAt: new Date() })
+      index.add({ id: 2, name: "Carol", age: 35, createdAt: new Date() })
+
+      assert.deepStrictEqual(
+        Array.from(index.entries).map(([k]) => k),
+        [3, 2, 1],
+      )
+    })
   })
 
   describe("SortedView", () => {

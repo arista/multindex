@@ -550,6 +550,19 @@ export class UniqueSortedIndexImpl<I, K extends SingleSortKey>
   }
 
   /**
+   * Iterator over all key/value pairs in the index in sorted order
+   */
+  get entries(): IterableIterator<[K, I]> {
+    return this.entriesIterator()
+  }
+
+  private *entriesIterator(): IterableIterator<[K, I]> {
+    for (const item of this.sortedItems) {
+      yield [this.storedKey(item), item]
+    }
+  }
+
+  /**
    * Iterator over all included items in sorted order
    */
   get items(): IterableIterator<I> {

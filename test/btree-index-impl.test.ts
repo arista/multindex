@@ -60,6 +60,45 @@ describe("UniqueBTreeIndexImpl", () => {
       assert.strictEqual(items[2]!.age, 25) // Bob
     })
 
+    it("should iterate key/item pairs in sorted order", () => {
+      const index = new UniqueBTreeIndexImpl<User, number>(null, {
+        key: (u) => u.id,
+      })
+
+      const carol = { id: 3, name: "Carol", age: 35, department: "HR" }
+      const alice = { id: 1, name: "Alice", age: 30, department: "Engineering" }
+      const bob = { id: 2, name: "Bob", age: 25, department: "Sales" }
+
+      index.add(carol)
+      index.add(alice)
+      index.add(bob)
+
+      const entries = Array.from(index.entries)
+      assert.deepStrictEqual(
+        entries.map(([k]) => k),
+        [1, 2, 3],
+      )
+      assert.deepStrictEqual(
+        entries.map(([, item]) => item),
+        [alice, bob, carol],
+      )
+    })
+
+    it("should iterate key/item pairs in descending order when the key is descending", () => {
+      const index = new UniqueBTreeIndexImpl<User, number>(null, {
+        key: { direction: "desc", get: (u) => u.age },
+      })
+
+      index.add({ id: 1, name: "Alice", age: 30, department: "Engineering" })
+      index.add({ id: 2, name: "Bob", age: 25, department: "Sales" })
+      index.add({ id: 3, name: "Carol", age: 35, department: "HR" })
+
+      assert.deepStrictEqual(
+        Array.from(index.entries).map(([k]) => k),
+        [35, 30, 25],
+      )
+    })
+
     it("should remove items", () => {
       const index = new UniqueBTreeIndexImpl<User, number>(null, {
         key: (u) => u.id,
@@ -231,6 +270,31 @@ describe("ManyBTreeIndexImpl", () => {
 
       const keys = Array.from(index.keys)
       assert.deepStrictEqual(keys, [25, 30, 35])
+    })
+
+    it("should iterate key/subindex pairs in sorted key order", () => {
+      const index = new ManyBTreeIndexImpl<User, number, ReturnType<typeof SetIndexImpl<User>>>(
+        null,
+        { key: (u) => u.age },
+        () => new SetIndexImpl<User>(null, {}),
+      )
+
+      index.add({ id: 1, name: "Alice", age: 30, department: "Engineering" })
+      index.add({ id: 2, name: "Bob", age: 25, department: "Sales" })
+      index.add({ id: 3, name: "Carol", age: 35, department: "HR" })
+      index.add({ id: 4, name: "Dave", age: 30, department: "Engineering" })
+
+      const entries = Array.from(index.entries)
+      assert.deepStrictEqual(
+        entries.map(([k]) => k),
+        [25, 30, 35],
+      )
+      assert.deepStrictEqual(
+        entries.map(([, subindex]) => subindex.count),
+        [1, 2, 1],
+      )
+      // The subindex is the same object tryGet hands back, not a copy
+      assert.strictEqual(entries[1]![1], index.tryGet(30))
     })
 
     it("should remove items from subindexes", () => {

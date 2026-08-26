@@ -216,6 +216,13 @@ export class UniqueBTreeIndexImpl<I, K extends SingleSortKey>
   }
 
   /**
+   * Iterator over all key/value pairs in sorted order
+   */
+  get entries(): IterableIterator<[K, I]> {
+    return this.btree.entries() as IterableIterator<[K, I]>
+  }
+
+  /**
    * Iterator over all included items in sorted order
    */
   get items(): IterableIterator<I> {

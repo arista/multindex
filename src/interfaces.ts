@@ -106,14 +106,28 @@ export interface MapIndex<I, V, K> extends SetIndex<I> {
   tryGet(key: K): V | null
 
   /**
-   * Get the value for a key. Throws if not found.
+   * Get the value for a key.
+   *
+   * On a unique index, throws KeyNotFoundError if the key is absent. On a many
+   * index there is nothing to throw about — an absent key yields an empty
+   * subindex, which is created and stored at that key. That vivified subindex
+   * stays in the index (empty subindexes are only pruned when an item is
+   * removed), so it is visible to hasKey, keys, and entries from then on. Use
+   * tryGet for a lookup that leaves the index alone.
    */
   get(key: K): V
 
   /**
-   * Iterator over all keys in the index
+   * Iterator over all keys in the index. On a many index this can include a key
+   * whose subindex is empty — see {@link get}.
    */
   readonly keys: IterableIterator<K>
+
+  /**
+   * Iterator over all key/value pairs in the index. On a many index a value can
+   * be an empty subindex — see {@link get}.
+   */
+  readonly entries: IterableIterator<[K, V]>
 }
 
 // =============================================================================

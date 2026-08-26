@@ -178,6 +178,13 @@ export class ManyMapIndexImpl<I, K, SUBIX extends IndexBase<I>>
   }
 
   /**
+   * Iterator over all key/value pairs in the index
+   */
+  get entries(): IterableIterator<[K, SUBIX]> {
+    return this.map.entries()
+  }
+
+  /**
    * Iterator over all included items (across all subindexes)
    */
   get items(): IterableIterator<I> {

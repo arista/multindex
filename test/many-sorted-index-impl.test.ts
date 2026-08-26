@@ -200,6 +200,47 @@ describe("ManySortedIndexImpl", () => {
       // Engineering comes first
       assert.strictEqual(items[0], bob)
     })
+
+    it("should iterate key/subindex pairs in sorted order", () => {
+      const index = new ManySortedIndexImpl<User, string, SetIndexImpl<User>>(
+        null,
+        { key: (u) => u.department },
+        () => new SetIndexImpl<User>(null),
+      )
+
+      index.add({ id: 1, name: "Alice", department: "Sales", age: 30 })
+      index.add({ id: 2, name: "Bob", department: "Engineering", age: 25 })
+      index.add({ id: 3, name: "Carol", department: "Engineering", age: 35 })
+
+      const entries = Array.from(index.entries)
+      assert.deepStrictEqual(
+        entries.map(([k]) => k),
+        ["Engineering", "Sales"],
+      )
+      assert.deepStrictEqual(
+        entries.map(([, subindex]) => subindex.count),
+        [2, 1],
+      )
+      // The subindex is the same object tryGet hands back, not a copy
+      assert.strictEqual(entries[0]![1], index.tryGet("Engineering"))
+    })
+
+    it("should iterate key/subindex pairs in descending order when the key is descending", () => {
+      const index = new ManySortedIndexImpl<User, string, SetIndexImpl<User>>(
+        null,
+        { key: { direction: "desc", get: (u) => u.department } },
+        () => new SetIndexImpl<User>(null),
+      )
+
+      index.add({ id: 1, name: "Alice", department: "Sales", age: 30 })
+      index.add({ id: 2, name: "Bob", department: "Engineering", age: 25 })
+      index.add({ id: 3, name: "Carol", department: "Marketing", age: 35 })
+
+      assert.deepStrictEqual(
+        Array.from(index.entries).map(([k]) => k),
+        ["Sales", "Marketing", "Engineering"],
+      )
+    })
   })
 
   describe("SortedView", () => {
